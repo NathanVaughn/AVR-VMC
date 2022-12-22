@@ -5,10 +5,10 @@
 Run the following commands:
 
 ```bash
-git clone --recurse-submodules https://github.com/bellflight/AVR-2022 ~/AVR-2022
-cd ~/AVR-2022/VMC/scripts
-chmod +x setup.py
-./setup.py
+git clone --recurse-submodules https://github.com/bellflight/AVR-VMC ~/AVR-VMC
+cd ~/AVR-VMC
+chmod +x install.py
+./install.py
 ```
 
 Please note, this setup script WILL take a while the first time
@@ -81,5 +81,5 @@ If you ever need to update the AVR software, run:
 # Update the git repo
 git pull
 # Re-run the setup script
-./setup.py
+./install.py
 ```

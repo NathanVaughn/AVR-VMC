@@ -2,38 +2,18 @@
 
 import argparse
 import getpass
-import os
 import subprocess
-import sys
 
-# fmt: off
+from utils import check_sudo
 
-def check_sudo():
-    # skip these checks on Windows
-    if sys.platform == "win32":
-        return
-
-    if os.geteuid() != 0:
-        # re run ourselves with sudo
-        print("Needing sudo privileges, re-launching")
-
-        try:
-            sys.exit(
-                subprocess.run(["sudo", sys.executable, __file__] + sys.argv[1:]).returncode
-            )
-        except PermissionError:
-            sys.exit(0)
-        except KeyboardInterrupt:
-            sys.exit(1)
-
-def disconnect():
+def disconnect() -> None:
     """
     Disconnect the wlan0 interface
     """
     # supress STDERR here
     subprocess.call(["nmcli", "device", "disconnect", "wlan0"], stderr=subprocess.DEVNULL)
 
-def connect():
+def connect() -> None:
     """
     Connect the wlan0 interface
     """
@@ -58,7 +38,7 @@ def connect():
     print(f"===== Connecting to network {ssid} =====")
     subprocess.check_call(cmd)
 
-def create():
+def create() -> None:
     """
     Create a network with the wlan0 interface
     """
@@ -92,7 +72,7 @@ def create():
     subprocess.check_call(["nmcli", "device", "wifi", "hotspot", "ifname", "wlan0", "ssid", ssid, "password", password])
     subprocess.check_call(["nmcli", "connection", "modify", "Hotspot", "connection.autoconnect", "yes"])
 
-def status():
+def status() -> None:
     """
     Show the currently connected wifi network
     """

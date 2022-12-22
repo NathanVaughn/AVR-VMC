@@ -6,76 +6,79 @@ import shutil
 import signal
 import subprocess
 import sys
-import tempfile
 import warnings
 from typing import Any, List
 
 import yaml
+import tomli
 
-IMAGE_BASE = "ghcr.io/bellflight/avr/2022/"
+from utils import check_sudo
+
+IMAGE_BASE = "ghcr.io/bellflight/avr/"
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
+MODULES_DIR = os.path.join(THIS_DIR, "modules")
 
 
-def check_sudo() -> None:
-    # skip these checks on Windows
-    if sys.platform == "win32":
-        return
+def export_poetry_requiremnts(directory: str) -> None:
+    """
+    Export dependencies from poetry.lock to a requirements.txt file.
+    If this this starts to fail us, we may need to install Poetry as part of the setup.
+    """
+    with open(os.path.join(directory, "poetry.lock"), "rb") as fp:
+        lock_file_contents = tomli.load(fp)
 
-    # Check if Docker requires sudo
-    result = subprocess.run(
-        ["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
-    if result.returncode == 0:
-        # either we have permission to run docker as non-root
-        # or we have sudo
-        return
+    # Extract the dependencies from the lock file
+    dependencies = lock_file_contents["package"]
 
-    # re run ourselves with sudo
-    print("Needing sudo privileges to run docker, re-launching")
-
-    try:
-        sys.exit(
-            subprocess.run(["sudo", sys.executable, __file__] + sys.argv[1:]).returncode
-        )
-    except PermissionError:
-        sys.exit(0)
-    except KeyboardInterrupt:
-        sys.exit(1)
+    # Write the dependencies to the requirements.txt file
+    with open(os.path.join(directory, "requirements.txt"), "w") as fp:
+        for dependency in dependencies:
+            if dependency["category"] == "main":
+                fp.write(f"{dependency['name']}=={dependency['version']}\n")
 
 
 def apriltag_service(compose_services: dict) -> None:
+    apriltag_dir = os.path.join(MODULES_DIR, "apriltag")
+
     apriltag_data = {
         "depends_on": ["mqtt"],
-        "build": os.path.join(THIS_DIR, "apriltag"),
-        "restart": "unless-stopped",
+        "build": apriltag_dir,
+        "restart": "on-failure",
         "volumes": ["/tmp/argus_socket:/tmp/argus_socket"],
     }
+    export_poetry_requiremnts(apriltag_dir)
 
     compose_services["apriltag"] = apriltag_data
 
 
 def fcm_service(compose_services: dict, local: bool = False) -> None:
+    fcm_dir = os.path.join(MODULES_DIR, "fcm")
+
     fcm_data = {
         "depends_on": ["mqtt", "mavp2p"],
-        "restart": "unless-stopped",
+        "restart": "on-failure",
     }
 
     if local:
-        fcm_data["build"] = os.path.join(THIS_DIR, "fcm")
+        fcm_data["build"] = fcm_dir
+        export_poetry_requiremnts(fcm_dir)
     else:
-        fcm_data["image"] = f"{IMAGE_BASE}fcm:latest"
+        fcm_data["image"] = f"{IMAGE_BASE}flightcontrol:latest"
 
     compose_services["fcm"] = fcm_data
 
 
 def fusion_service(compose_services: dict, local: bool = False) -> None:
+    fusion_dir = os.path.join(MODULES_DIR, "fusion")
+
     fusion_data = {
         "depends_on": ["mqtt", "vio"],
-        "restart": "unless-stopped",
+        "restart": "on-failure",
     }
 
     if local:
-        fusion_data["build"] = os.path.join(THIS_DIR, "fusion")
+        fusion_data["build"] = fusion_dir
+        export_poetry_requiremnts(fusion_dir)
     else:
         fusion_data["image"] = f"{IMAGE_BASE}fusion:latest"
 
@@ -84,14 +87,14 @@ def fusion_service(compose_services: dict, local: bool = False) -> None:
 
 def mavp2p_service(compose_services: dict, local: bool = False) -> None:
     mavp2p_data = {
-        "restart": "unless-stopped",
+        "restart": "on-failure",
         "devices": ["/dev/ttyTHS1:/dev/ttyTHS1"],
         "ports": ["5760:5760/tcp"],
         "command": "serial:/dev/ttyTHS1:500000 tcps:0.0.0.0:5760 udpc:fcm:14541 udpc:fcm:14542",
     }
 
     if local:
-        mavp2p_data["build"] = os.path.join(THIS_DIR, "mavp2p")
+        mavp2p_data["build"] = os.path.join(MODULES_DIR, "mavp2p")
     else:
         mavp2p_data["image"] = f"{IMAGE_BASE}mavp2p:latest"
 
@@ -101,38 +104,44 @@ def mavp2p_service(compose_services: dict, local: bool = False) -> None:
 def mqtt_service(compose_services: dict, local: bool = False) -> None:
     mqtt_data = {
         "ports": ["18830:18830"],
-        "restart": "unless-stopped",
+        "restart": "on-failure",
     }
 
     if local:
-        mqtt_data["build"] = os.path.join(THIS_DIR, "mqtt")
+        mqtt_data["build"] = os.path.join(MODULES_DIR, "mqtt")
     else:
-        mqtt_data["image"] = f"{IMAGE_BASE}mqtt:latest"
+        mqtt_data["image"] = f"{IMAGE_BASE}mosquitto:latest"
 
     compose_services["mqtt"] = mqtt_data
 
 
 def pcm_service(compose_services: dict, local: bool = False) -> None:
+    pcm_dir = os.path.join(MODULES_DIR, "pcm")
+
     pcm_data = {
         "depends_on": ["mqtt"],
-        "restart": "unless-stopped",
+        "restart": "on-failure",
         "devices": ["/dev/ttyACM0:/dev/ttyACM0"],
     }
 
     if local:
-        pcm_data["build"] = os.path.join(THIS_DIR, "pcm")
+        pcm_data["build"] = pcm_dir
+        export_poetry_requiremnts(pcm_dir)
     else:
-        pcm_data["image"] = f"{IMAGE_BASE}pcm:latest"
+        pcm_data["image"] = f"{IMAGE_BASE}peripheralcontrol:latest"
 
     compose_services["pcm"] = pcm_data
 
 
 def sandbox_service(compose_services: dict) -> None:
+    sandbox_dir = os.path.join(MODULES_DIR, "sandbox")
+
     sandbox_data = {
         "depends_on": ["mqtt"],
-        "build": os.path.join(THIS_DIR, "sandbox"),
-        "restart": "unless-stopped",
+        "build": sandbox_dir,
+        "restart": "on-failure",
     }
+    export_poetry_requiremnts(sandbox_dir)
 
     compose_services["sandbox"] = sandbox_data
 
@@ -141,9 +150,11 @@ def status_service(compose_services: dict, local: bool = False) -> None:
     # don't create a volume for nvpmodel if it's not available
     nvpmodel_source = shutil.which("nvpmodel")
 
+    status_dir = os.path.join(MODULES_DIR, "status")
+
     status_data = {
         "depends_on": ["mqtt"],
-        "restart": "unless-stopped",
+        "restart": "on-failure",
         "privileged": True,
         "volumes": [
             {
@@ -166,7 +177,8 @@ def status_service(compose_services: dict, local: bool = False) -> None:
         warnings.warn("nvpmodel is not found")
 
     if local:
-        status_data["build"] = os.path.join(THIS_DIR, "status")
+        status_data["build"] = status_dir
+        export_poetry_requiremnts(status_dir)
     else:
         status_data["image"] = f"{IMAGE_BASE}status:latest"
 
@@ -174,14 +186,17 @@ def status_service(compose_services: dict, local: bool = False) -> None:
 
 
 def thermal_service(compose_services: dict, local: bool = False) -> None:
+    thermal_dir = os.path.join(MODULES_DIR, "thermal")
+
     thermal_data = {
         "depends_on": ["mqtt"],
-        "restart": "unless-stopped",
+        "restart": "on-failure",
         "privileged": True,
     }
 
     if local:
-        thermal_data["build"] = os.path.join(THIS_DIR, "thermal")
+        thermal_data["build"] = thermal_dir
+        export_poetry_requiremnts(thermal_dir)
     else:
         thermal_data["image"] = f"{IMAGE_BASE}thermal:latest"
 
@@ -189,19 +204,22 @@ def thermal_service(compose_services: dict, local: bool = False) -> None:
 
 
 def vio_service(compose_services: dict, local: bool = False) -> None:
+    vio_dir = os.path.join(MODULES_DIR, "vio")
+
     vio_data = {
         "depends_on": ["mqtt"],
-        "restart": "unless-stopped",
+        "restart": "on-failure",
         "privileged": True,
         "volumes": [
-            f"{os.path.join(THIS_DIR, 'vio', 'settings')}:/usr/local/zed/settings/"
+            f"{os.path.join(vio_dir, 'settings')}:/usr/local/zed/settings/"
         ],
     }
 
     if local:
-        vio_data["build"] = os.path.join(THIS_DIR, "vio")
+        vio_data["build"] = vio_dir
+        export_poetry_requiremnts(vio_dir)
     else:
-        vio_data["image"] = f"{IMAGE_BASE}vio:latest"
+        vio_data["image"] = f"{IMAGE_BASE}visual:latest"
 
     compose_services["vio"] = vio_data
 
@@ -228,7 +246,7 @@ def prepare_compose_file(local: bool = False) -> str:
     compose_data = {"version": "3", "services": compose_services}
 
     # write compose file
-    compose_file = tempfile.mkstemp(prefix="docker-compose-", suffix=".yml")[1]
+    compose_file = os.path.join(THIS_DIR, "docker-compose.yml")
 
     with open(compose_file, "w") as fp:
         yaml.dump(compose_data, fp)
@@ -241,7 +259,7 @@ def main(action: str, modules: List[str], local: bool = False) -> None:
     compose_file = prepare_compose_file(local)
 
     # run docker-compose
-    project_name = "AVR-2022"
+    project_name = "AVR"
     if os.name == "nt":
         # for some reason on Windows docker-compose doesn't like upper case???
         project_name = project_name.lower()

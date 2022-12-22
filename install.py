@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 
+from utils import check_sudo
+
 # colors
 RED = "\033[0;31m"
 LIGHTRED = "\033[1;31m"
@@ -18,27 +20,9 @@ LIGHTGREEN = "\033[1;32m"
 CYAN = "\033[0;36m"
 NC = "\033[0m"  # No Color
 
-AVR_DIR = os.path.join(os.path.expanduser("~"), "AVR-2022")
+AVR_DIR = os.path.join(os.path.expanduser("~"), "AVR-VMC")
 
 # fmt: off
-
-def check_sudo():
-    # skip these checks on Windows
-    if sys.platform == "win32":
-        return
-
-    if os.geteuid() != 0:
-        # re run ourselves with sudo
-        print("Needing sudo privileges, re-launching")
-
-        try:
-            sys.exit(
-                subprocess.run(["sudo", sys.executable, __file__] + sys.argv[1:]).returncode
-            )
-        except PermissionError:
-            sys.exit(0)
-        except KeyboardInterrupt:
-            sys.exit(1)
 
 def print_bar():
     """
@@ -65,7 +49,7 @@ def original_user_cmd(username, cmd):
 def main(development):
     if not os.path.isdir(AVR_DIR):
         print(f"AVR repository has not been cloned to {AVR_DIR}")
-        print(f"Do this with 'git clone --recurse-submodules https://github.com/bellflight/AVR-2022 {AVR_DIR}'")
+        print(f"Do this with 'git clone --recurse-submodules https://github.com/bellflight/AVR-VMC {AVR_DIR}'")
         sys.exit(1)
 
 
@@ -309,8 +293,8 @@ def main(development):
         print(f"Installing {service}")
         shutil.copy(os.path.join(AVR_DIR, "VMC", "scripts", service), "/etc/systemd/system/")
         # SPI mount service will not work until Jetson is rebooted after enabling SPI
-        subprocess.run(["systemctl", "enable", service], check= service!="spio-mount.service")
-        subprocess.run(["systemctl", "start", service], check= service!="spio-mount.service")
+        subprocess.run(["systemctl", "enable", service], check=service!="spio-mount.service")
+        subprocess.run(["systemctl", "start", service], check=service!="spio-mount.service")
     print_bar()
 
 
@@ -337,7 +321,7 @@ def main(development):
         subprocess.check_call(["python3", os.path.join(AVR_DIR, "PX4", "build.py"), "--pymavlink"])
 
     # make sure docker is logged in
-    proc = subprocess.run(["docker", "pull", "ghcr.io/bellflight/avr/2022/mqtt:latest"])
+    proc = subprocess.run(["docker", "pull", "ghcr.io/bellflight/avr/mavp2p:latest"])
     if proc.returncode != 0:
         print("Please log into GitHub container registry:")
         subprocess.check_call(["docker", "login", "ghcr.io"])
