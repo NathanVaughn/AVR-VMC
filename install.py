@@ -127,7 +127,7 @@ def main(development):
         # check if we're on the main branch
         if not development:
             print("Making sure we're on the main branch")
-            current_branch = subprocess.check_output(original_user_cmd(orig_username, ["git", "rev-parse", "--abbrev-ref", "HEAD"]), cwd=AVR_DIR).decode("utf-8").strip()
+            current_branch = subprocess.check_output(original_user_cmd(orig_username, ["git", "rev-parse", "--abbrev-ref", "HEAD"]), cwd=AVR_DIR, stderr=subprocess.DEVNULL).decode("utf-8").strip()
             if current_branch != "main":
                 print(f"{LIGHTRED}WARNING:{NC} Not currently on the main branch, run 'git checkout main && git pull' then re-run this script")
                 sys.exit(1)
@@ -148,9 +148,9 @@ def main(development):
 
     print_title("Creating symlinks")
     symlink_sources = [
-        os.path.join(AVR_DIR, "VMC", "start.py"),
-        os.path.join(AVR_DIR, "VMC", "scripts", "setup.py"),
-        os.path.join(AVR_DIR, "VMC", "scripts", "wifi.py")]
+        os.path.join(AVR_DIR, "start.py"),
+        os.path.join(AVR_DIR, "install.py"),
+        os.path.join(AVR_DIR, "wifi.py")]
 
     for source in symlink_sources:
         if not os.path.isfile(source):
@@ -192,7 +192,7 @@ def main(development):
     # install pip packages
     print("Installing Python Packages")
     subprocess.check_call(["python3", "-m", "pip", "install", "--upgrade", "pip", "wheel"], stderr=subprocess.DEVNULL)
-    subprocess.check_call(["python3", "-m", "pip", "install", "-r", os.path.join(AVR_DIR, "VMC", "scripts", "requirements.txt")], stderr=subprocess.DEVNULL)
+    subprocess.check_call(["python3", "-m", "pip", "install", "-r", os.path.join(AVR_DIR, "resources", "requirements.txt")], stderr=subprocess.DEVNULL)
 
     if development:
         subprocess.check_call(["python3", "-m", "pip", "install", "--upgrade", "jetson-stats"], stderr=subprocess.DEVNULL)
@@ -277,7 +277,7 @@ def main(development):
 
     # needed so that the shared libs are included in the docker container creation from the host
     print("Copying Docker runtime libraries definition")
-    shutil.copy(os.path.join(AVR_DIR, "VMC/apriltag/linux/avr.csv"), "/etc/nvidia-container-runtime/host-files-for-container.d/")
+    shutil.copy(os.path.join(AVR_DIR, "resources/avr-nvidia-libraries.csv"), "/etc/nvidia-container-runtime/host-files-for-container.d/")
 
     # restart docker so new runtime takes into effect
     print("Restarting Docker service")
@@ -291,7 +291,7 @@ def main(development):
     services = ["spio-mount.service", "fan-100.service"]
     for service in services:
         print(f"Installing {service}")
-        shutil.copy(os.path.join(AVR_DIR, "VMC", "scripts", service), "/etc/systemd/system/")
+        shutil.copy(os.path.join(AVR_DIR, "resources", service), "/etc/systemd/system/")
         # SPI mount service will not work until Jetson is rebooted after enabling SPI
         subprocess.run(["systemctl", "enable", service], check=service!="spio-mount.service")
         subprocess.run(["systemctl", "start", service], check=service!="spio-mount.service")
@@ -300,7 +300,7 @@ def main(development):
 
 
     print_title("Obtaining ZED Camera Configuration")
-    zed_settings_dir = os.path.join(AVR_DIR, 'VMC/vio/settings')
+    zed_settings_dir = os.path.join(AVR_DIR, 'modules/vio/settings')
 
     zed_serial = subprocess.check_output(["docker", "run", "--rm", "--mount", f"type=bind,source={zed_settings_dir},target=/usr/local/zed/settings/", "--privileged", "docker.io/stereolabs/zed:3.7-py-runtime-l4t-r32.6", "python3", "-c", "import pyzed.sl;z=pyzed.sl.Camera();z.open();print(z.get_camera_information().serial_number);z.close();"]).decode("utf-8").strip()
     if zed_serial == "0":
@@ -316,10 +316,6 @@ def main(development):
 
 
     print_title("Building AVR Software")
-    # build pymavlink
-    if development:
-        subprocess.check_call(["python3", os.path.join(AVR_DIR, "PX4", "build.py"), "--pymavlink"])
-
     # make sure docker is logged in
     proc = subprocess.run(["docker", "pull", "ghcr.io/bellflight/avr/mavp2p:latest"])
     if proc.returncode != 0:
@@ -327,13 +323,13 @@ def main(development):
         subprocess.check_call(["docker", "login", "ghcr.io"])
 
     # pull images
-    cmd = ["python3", os.path.join(AVR_DIR, "VMC", "start.py"), "pull", "--norm"]
+    cmd = ["python3", os.path.join(AVR_DIR, "start.py"), "pull", "--norm"]
     if development:
         cmd.append("--local")
     subprocess.check_call(cmd)
 
     # build images
-    cmd = ["python3", os.path.join(AVR_DIR, "VMC", "start.py"), "build", "--norm"]
+    cmd = ["python3", os.path.join(AVR_DIR, "start.py"), "build", "--norm"]
     if development:
         cmd.append("--local")
     subprocess.check_call(cmd)
@@ -366,7 +362,7 @@ def main(development):
         subprocess.run(["reboot"])
 
 if __name__ == "__main__":
-    check_sudo()
+    check_sudo(__file__)
 
     parser = argparse.ArgumentParser(description="Setup the Jetson for AVR")
     parser.add_argument("--development", "--dev", action="store_true", help="Development setup")

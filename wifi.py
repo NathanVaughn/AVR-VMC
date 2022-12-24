@@ -79,7 +79,7 @@ def status() -> None:
     subprocess.check_call(["nmcli", "connection", "show", "--active"])
 
 if __name__ == "__main__":
-    check_sudo()
+    check_sudo(__file__)
 
     parser = argparse.ArgumentParser(description="WiFi Setup Script")
     parser.add_argument("action", choices=["connect", "create", "disconnect", "status"])

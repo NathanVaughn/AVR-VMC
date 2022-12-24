@@ -301,7 +301,7 @@ def main(action: str, modules: List[str], local: bool = False) -> None:
 
 # sourcery skip: merge-duplicate-blocks, remove-redundant-if
 if __name__ == "__main__":
-    check_sudo()
+    check_sudo(__file__)
 
     min_modules = ["fcm", "fusion", "mavp2p", "mqtt", "vio"]
     norm_modules = min_modules + ["apriltag", "pcm", "status", "thermal"]

@@ -3,7 +3,7 @@ import sys
 import subprocess
 
 
-def check_sudo() -> None:
+def check_sudo(original_file) -> None:
     # skip these checks on Windows
     if sys.platform == "win32":
         return
@@ -14,7 +14,7 @@ def check_sudo() -> None:
 
         try:
             sys.exit(
-                subprocess.run(["sudo", sys.executable, __file__] + sys.argv[1:]).returncode
+                subprocess.run(["sudo", sys.executable, original_file] + sys.argv[1:]).returncode
             )
         except PermissionError:
             sys.exit(0)
