@@ -10,31 +10,12 @@ import warnings
 from typing import Any, List
 
 import yaml
-import tomli
 
 from utils import check_sudo
 
 IMAGE_BASE = "ghcr.io/bellflight/avr/"
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
 MODULES_DIR = os.path.join(THIS_DIR, "modules")
-
-
-def export_poetry_requiremnts(directory: str) -> None:
-    """
-    Export dependencies from poetry.lock to a requirements.txt file.
-    If this this starts to fail us, we may need to install Poetry as part of the setup.
-    """
-    with open(os.path.join(directory, "poetry.lock"), "rb") as fp:
-        lock_file_contents = tomli.load(fp)
-
-    # Extract the dependencies from the lock file
-    dependencies = lock_file_contents["package"]
-
-    # Write the dependencies to the requirements.txt file
-    with open(os.path.join(directory, "requirements.txt"), "w") as fp:
-        for dependency in dependencies:
-            if dependency["category"] == "main":
-                fp.write(f"{dependency['name']}=={dependency['version']}\n")
 
 
 def apriltag_service(compose_services: dict) -> None:
@@ -46,7 +27,6 @@ def apriltag_service(compose_services: dict) -> None:
         "restart": "on-failure",
         "volumes": ["/tmp/argus_socket:/tmp/argus_socket"],
     }
-    export_poetry_requiremnts(apriltag_dir)
 
     compose_services["apriltag"] = apriltag_data
 
@@ -61,7 +41,6 @@ def fcm_service(compose_services: dict, local: bool = False) -> None:
 
     if local:
         fcm_data["build"] = fcm_dir
-        export_poetry_requiremnts(fcm_dir)
     else:
         fcm_data["image"] = f"{IMAGE_BASE}flightcontrol:latest"
 
@@ -78,7 +57,6 @@ def fusion_service(compose_services: dict, local: bool = False) -> None:
 
     if local:
         fusion_data["build"] = fusion_dir
-        export_poetry_requiremnts(fusion_dir)
     else:
         fusion_data["image"] = f"{IMAGE_BASE}fusion:latest"
 
@@ -126,7 +104,6 @@ def pcm_service(compose_services: dict, local: bool = False) -> None:
 
     if local:
         pcm_data["build"] = pcm_dir
-        export_poetry_requiremnts(pcm_dir)
     else:
         pcm_data["image"] = f"{IMAGE_BASE}peripheralcontrol:latest"
 
@@ -141,7 +118,6 @@ def sandbox_service(compose_services: dict) -> None:
         "build": sandbox_dir,
         "restart": "on-failure",
     }
-    export_poetry_requiremnts(sandbox_dir)
 
     compose_services["sandbox"] = sandbox_data
 
@@ -178,7 +154,6 @@ def status_service(compose_services: dict, local: bool = False) -> None:
 
     if local:
         status_data["build"] = status_dir
-        export_poetry_requiremnts(status_dir)
     else:
         status_data["image"] = f"{IMAGE_BASE}status:latest"
 
@@ -196,7 +171,6 @@ def thermal_service(compose_services: dict, local: bool = False) -> None:
 
     if local:
         thermal_data["build"] = thermal_dir
-        export_poetry_requiremnts(thermal_dir)
     else:
         thermal_data["image"] = f"{IMAGE_BASE}thermal:latest"
 
@@ -210,21 +184,18 @@ def vio_service(compose_services: dict, local: bool = False) -> None:
         "depends_on": ["mqtt"],
         "restart": "on-failure",
         "privileged": True,
-        "volumes": [
-            f"{os.path.join(vio_dir, 'settings')}:/usr/local/zed/settings/"
-        ],
+        "volumes": [f"{os.path.join(vio_dir, 'settings')}:/usr/local/zed/settings/"],
     }
 
     if local:
         vio_data["build"] = vio_dir
-        export_poetry_requiremnts(vio_dir)
     else:
         vio_data["image"] = f"{IMAGE_BASE}visual:latest"
 
     compose_services["vio"] = vio_data
 
 
-def prepare_compose_file(local: bool = False) -> str:
+def prepare_compose_file(action: str, local: bool = False) -> str:
     # prepare compose services dict
     compose_services = {}
 
@@ -239,7 +210,8 @@ def prepare_compose_file(local: bool = False) -> str:
     vio_service(compose_services, local)
 
     # nvpmodel not available on Windows
-    if os.name != "nt":
+    if os.name != "nt" or action == "build":
+        # only allow this if we're building
         status_service(compose_services, local)
 
     # construct full dict
@@ -256,7 +228,7 @@ def prepare_compose_file(local: bool = False) -> str:
 
 
 def main(action: str, modules: List[str], local: bool = False) -> None:
-    compose_file = prepare_compose_file(local)
+    compose_file = prepare_compose_file(action, local=local)
 
     # run docker-compose
     project_name = "AVR"
