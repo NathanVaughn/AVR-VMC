@@ -14,7 +14,7 @@ import yaml
 from utils import check_sudo
 
 IMAGE_BASE = "ghcr.io/bellflight/avr/"
-THIS_DIR = os.path.abspath(os.path.dirname(__file__))
+THIS_DIR = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 MODULES_DIR = os.path.join(THIS_DIR, "modules")
 
 
@@ -261,12 +261,6 @@ def main(action: str, modules: List[str], local: bool = False) -> None:
 
     signal.signal(signal.SIGINT, signal_handler)
     proc.wait()
-
-    # cleanup
-    # try:
-    #     os.remove(compose_file)
-    # except PermissionError:
-    #     pass
 
     sys.exit(proc.returncode)
 
