@@ -153,8 +153,10 @@ def main(development):
         os.path.join(AVR_DIR, "wifi.py")]
 
     for source in symlink_sources:
-        if not os.path.isfile(source):
-            os.link(source, os.path.join(os.path.expanduser("~"), os.path.basename(source)))
+        dest = os.path.join(os.path.expanduser("~"), os.path.basename(source))
+        if not os.path.isfile(dest):
+            os.link(source, dest)
+            print(f"Created {source} -> {dest}")
     print_bar()
 
 
