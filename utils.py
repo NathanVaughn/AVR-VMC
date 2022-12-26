@@ -14,7 +14,10 @@ def check_sudo(original_file) -> None:
 
         try:
             sys.exit(
-                subprocess.run(["sudo", sys.executable, original_file] + sys.argv[1:]).returncode
+                subprocess.run(
+                    ["sudo", sys.executable, os.path.realpath(original_file)]
+                    + sys.argv[1:]
+                ).returncode
             )
         except PermissionError:
             sys.exit(0)

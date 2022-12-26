@@ -22,7 +22,7 @@ NC = "\033[0m"  # No Color
 
 AVR_DIR = os.path.join(os.path.expanduser("~"), "AVR-VMC")
 
-# fmt: off
+
 
 def print_bar():
     """

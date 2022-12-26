@@ -6,19 +6,25 @@ import subprocess
 
 from utils import check_sudo
 
+
 def disconnect() -> None:
     """
     Disconnect the wlan0 interface
     """
     # supress STDERR here
-    subprocess.call(["nmcli", "device", "disconnect", "wlan0"], stderr=subprocess.DEVNULL)
+    subprocess.call(
+        ["nmcli", "device", "disconnect", "wlan0"], stderr=subprocess.DEVNULL
+    )
+
 
 def connect() -> None:
     """
     Connect the wlan0 interface
     """
     # print the list of available networks, limited to 20 lines
-    output = subprocess.check_output(["nmcli", "device", "wifi", "list"]).decode("utf-8")
+    output = subprocess.check_output(["nmcli", "device", "wifi", "list"]).decode(
+        "utf-8"
+    )
     for i, line in enumerate(output.splitlines()):
         if i < 20:
             print(line)
@@ -38,6 +44,7 @@ def connect() -> None:
     print(f"===== Connecting to network {ssid} =====")
     subprocess.check_call(cmd)
 
+
 def create() -> None:
     """
     Create a network with the wlan0 interface
@@ -54,7 +61,9 @@ def create() -> None:
     if not ssid:
         ssid = default_ssid
 
-    password = input(f"Enter the password (default '{default_password}') (must be at least 8 characters): ")
+    password = input(
+        f"Enter the password (default '{default_password}') (must be at least 8 characters): "
+    )
     if not password:
         password = default_password
 
@@ -65,18 +74,37 @@ def create() -> None:
     disconnect()
 
     # delete old hotspot connection profile
-    subprocess.call(["nmcli", "connection", "delete", "Hotspot"], stderr=subprocess.DEVNULL)
+    subprocess.call(
+        ["nmcli", "connection", "delete", "Hotspot"], stderr=subprocess.DEVNULL
+    )
 
     # create
     print(f"===== Creating network {ssid} with password {password} =====")
-    subprocess.check_call(["nmcli", "device", "wifi", "hotspot", "ifname", "wlan0", "ssid", ssid, "password", password])
-    subprocess.check_call(["nmcli", "connection", "modify", "Hotspot", "connection.autoconnect", "yes"])
+    subprocess.check_call(
+        [
+            "nmcli",
+            "device",
+            "wifi",
+            "hotspot",
+            "ifname",
+            "wlan0",
+            "ssid",
+            ssid,
+            "password",
+            password,
+        ]
+    )
+    subprocess.check_call(
+        ["nmcli", "connection", "modify", "Hotspot", "connection.autoconnect", "yes"]
+    )
+
 
 def status() -> None:
     """
     Show the currently connected wifi network
     """
     subprocess.check_call(["nmcli", "connection", "show", "--active"])
+
 
 if __name__ == "__main__":
     check_sudo(__file__)
