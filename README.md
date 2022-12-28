@@ -79,7 +79,7 @@ If you ever need to update the AVR software, run:
 
 ```bash
 # Update the git repo
-git pull
+git pull --recurse-submodules
 # Re-run the setup script
 ./install.py
 ```
