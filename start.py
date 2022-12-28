@@ -195,7 +195,7 @@ def vio_service(compose_services: dict, local: bool = False) -> None:
     compose_services["vio"] = vio_data
 
 
-def prepare_compose_file(action: str, local: bool = False) -> str:
+def prepare_compose_file(action: str, modules: List[str], local: bool = False) -> str:
     # prepare compose services dict
     compose_services = {}
 
@@ -205,7 +205,10 @@ def prepare_compose_file(action: str, local: bool = False) -> str:
     mavp2p_service(compose_services, local)
     mqtt_service(compose_services, local)
     pcm_service(compose_services, local)
-    sandbox_service(compose_services)
+    if "sandbox" in modules:
+        # older versions of Docker compose don't like it if a build directory doesn't
+        # exist, even though we're not asking for that service
+        sandbox_service(compose_services)
     thermal_service(compose_services, local)
     vio_service(compose_services, local)
 
@@ -228,7 +231,7 @@ def prepare_compose_file(action: str, local: bool = False) -> str:
 
 
 def main(action: str, modules: List[str], local: bool = False) -> None:
-    compose_file = prepare_compose_file(action, local=local)
+    compose_file = prepare_compose_file(action, modules=modules, local=local)
 
     # run docker-compose
     project_name = "AVR"
