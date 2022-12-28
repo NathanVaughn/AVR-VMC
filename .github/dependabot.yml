@@ -3,5 +3,5 @@ updates:
   - package-ecosystem: "gitsubmodule"
     directory: "/"
     schedule:
-      interval: "monthly"
+      interval: "daily"
     target-branch: "main"
