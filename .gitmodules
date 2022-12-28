@@ -1,30 +1,27 @@
 [submodule "modules/apriltag"]
 	path = modules/apriltag
 	url = https://github.com/bellflight/AVR-VMC-AprilTag-Module
-[submodule "modules/vio"]
-	path = modules/vio
-	url = https://github.com/bellflight/AVR-VMC-Visual-Module
-[submodule "modules/thermal"]
-	path = modules/thermal
-	url = https://github.com/bellflight/AVR-VMC-Thermal-Module
-[submodule "modules/status"]
-	path = modules/status
-	url = https://github.com/bellflight/AVR-VMC-Status-Module
-[submodule "modules/sandbox"]
-	path = modules/sandbox
-	url = https://github.com/bellflight/AVR-VMC-Sandbox-Module
+[submodule "modules/fcm"]
+	path = modules/fcm
+	url = https://github.com/bellflight/AVR-VMC-FlightControl-Module
 [submodule "modules/fusion"]
 	path = modules/fusion
 	url = https://github.com/bellflight/AVR-VMC-Fusion-Module
+[submodule "modules/mavp2p"]
+	path = modules/mavp2p
+	url = https://github.com/bellflight/AVR-VMC-Mavp2p
 [submodule "modules/mqtt"]
 	path = modules/mqtt
 	url = https://github.com/bellflight/AVR-VMC-Mosquitto
 [submodule "modules/pcm"]
 	path = modules/pcm
 	url = https://github.com/bellflight/AVR-VMC-PeripheralControl-Module
-[submodule "modules/mavp2p"]
-	path = modules/mavp2p
-	url = https://github.com/bellflight/AVR-VMC-Mavp2p
-[submodule "modules/fcm"]
-	path = modules/fcm
-	url = https://github.com/bellflight/AVR-VMC-FlightControl-Module
+[submodule "modules/status"]
+	path = modules/status
+	url = https://github.com/bellflight/AVR-VMC-Status-Module
+[submodule "modules/thermal"]
+	path = modules/thermal
+	url = https://github.com/bellflight/AVR-VMC-Thermal-Module
+[submodule "modules/vio"]
+	path = modules/vio
+	url = https://github.com/bellflight/AVR-VMC-Visual-Module
