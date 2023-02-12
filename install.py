@@ -100,7 +100,7 @@ def main(development):
     print(f"{NC}")
     print_bar()
 
-    orig_username = subprocess.check_output(["id", "-nu", os.environ["SUDO_UID"]]).decode("utf-8").strip()
+    orig_username = os.getlogin()
 
     print_title("Enabling Passwordless Sudo")
     new_line = f"{orig_username} ALL=(ALL) NOPASSWD: ALL\n"
