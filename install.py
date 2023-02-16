@@ -313,7 +313,7 @@ def main(development):
 
     # make sure at least one settings file exists
     if not development and not any(f.endswith(".conf") for f in os.listdir(zed_settings_dir)):
-        print(f"{RED}EROOR:{NC} ZED settings not found. Your drone will NOT fly. Plug in the ZED camera and try again.")
+        print(f"{RED}ERROR:{NC} ZED settings not found. Your drone will NOT fly. Plug in the ZED camera and try again.")
         sys.exit(1)
 
 
