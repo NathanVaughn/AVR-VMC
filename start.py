@@ -17,18 +17,23 @@ IMAGE_BASE = "ghcr.io/bellflight/avr/"
 THIS_DIR = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 MODULES_DIR = os.path.join(THIS_DIR, "modules")
 
-# constants
+# Environment variable constants
 
-MQTT_PORT = 18830
+# MQTT broker settings
+MQTT_HOST = "mqtt"
+MQTT_PORT = 1883
 
-FCC_DEVICE = "/dev/ttyTHS1"
+# PX4 flight controller serial device settings
+FCC_SERIAL_DEVICE = "/dev/ttyTHS1"
 FCC_SERIAL_BAUD_RATE = 500000
 
-MAVLINK_TCP_1 = 5760
-MAVLINK_UDP_1 = 14541
-MAVLINK_UDP_2 = 14542
+# Mavlink connection settings
+MAVLINK_TCP_1 = 5760  # for QGC
+MAVLINK_UDP_1 = 14541  # for mavsdk
+MAVLINK_UDP_2 = 14542  # for pymavlink
 
-PCM_DEVICE = "/dev/ttyACM0"
+# Peripheral control computer (Arduino) device settings
+PCM_SERIAL_DEVICE = "/dev/ttyACM0"
 PCM_SERIAL_BAUD_RATE = 115200
 
 
@@ -82,11 +87,11 @@ def fusion_service(compose_services: dict, local: bool = False) -> None:
 def mavp2p_service(compose_services: dict, local: bool = False) -> None:
     mavp2p_data = {
         "restart": "on-failure",
-        "devices": [f"{FCC_DEVICE}:{FCC_DEVICE}"],
+        "devices": [f"{FCC_SERIAL_DEVICE}:{FCC_SERIAL_DEVICE}"],
         "ports": [f"{MAVLINK_TCP_1}:{MAVLINK_TCP_1}/tcp"],
         "command": " ".join(
             [
-                f"serial:{FCC_DEVICE}:{FCC_SERIAL_BAUD_RATE}",
+                f"serial:{FCC_SERIAL_DEVICE}:{FCC_SERIAL_BAUD_RATE}",
                 f"tcps:0.0.0.0:{MAVLINK_TCP_1}",
                 f"udpc:fcm:{MAVLINK_UDP_1}",
                 f"udpc:fcm:{MAVLINK_UDP_2}",
@@ -106,6 +111,7 @@ def mavp2p_service(compose_services: dict, local: bool = False) -> None:
 def mqtt_service(compose_services: dict, local: bool = False) -> None:
     mqtt_data = {
         "ports": [f"{MQTT_PORT}:{MQTT_PORT}/tcp"],
+        "environment": {"MQTT_PORT": MQTT_PORT},
         "restart": "on-failure",
     }
 
@@ -123,10 +129,10 @@ def pcm_service(compose_services: dict, local: bool = False) -> None:
     pcm_data = {
         "depends_on": ["mqtt"],
         "restart": "on-failure",
-        "devices": [f"{PCM_DEVICE}:{PCM_DEVICE}"],
+        "devices": [f"{PCM_SERIAL_DEVICE}:{PCM_SERIAL_DEVICE}"],
         "environment": {
             "MQTT_PORT": MQTT_PORT,
-            "PCM_DEVICE": PCM_DEVICE,
+            "PCM_DEVICE": PCM_SERIAL_DEVICE,
             "PCM_SERIAL_BAUD_RATE": PCM_SERIAL_BAUD_RATE,
         },
     }
