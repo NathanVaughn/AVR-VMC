@@ -134,7 +134,7 @@ def pcm_service(compose_services: dict, local: bool = False) -> None:
         "environment": {
             "MQTT_HOST": MQTT_HOST,
             "MQTT_PORT": MQTT_PORT,
-            "PCM_DEVICE": PCM_SERIAL_DEVICE,
+            "PCM_SERIAL_DEVICE": PCM_SERIAL_DEVICE,
             "PCM_SERIAL_BAUD_RATE": PCM_SERIAL_BAUD_RATE,
         },
     }
