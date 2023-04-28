@@ -21,7 +21,7 @@ MODULES_DIR = os.path.join(THIS_DIR, "modules")
 
 # MQTT broker settings
 MQTT_HOST = "mqtt"
-MQTT_PORT = 1883
+MQTT_PORT = 18830
 
 # PX4 flight controller serial device settings
 FCC_SERIAL_DEVICE = "/dev/ttyTHS1"
