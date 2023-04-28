@@ -17,6 +17,20 @@ IMAGE_BASE = "ghcr.io/bellflight/avr/"
 THIS_DIR = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 MODULES_DIR = os.path.join(THIS_DIR, "modules")
 
+# constants
+
+MQTT_PORT = 18830
+
+FCC_DEVICE = "/dev/ttyTHS1"
+FCC_SERIAL_BAUD_RATE = 500000
+
+MAVLINK_TCP_1 = 5760
+MAVLINK_UDP_1 = 14541
+MAVLINK_UDP_2 = 14542
+
+PCM_DEVICE = "/dev/ttyACM0"
+PCM_SERIAL_BAUD_RATE = 115200
+
 
 def apriltag_service(compose_services: dict) -> None:
     apriltag_dir = os.path.join(MODULES_DIR, "apriltag")
@@ -37,6 +51,7 @@ def fcm_service(compose_services: dict, local: bool = False) -> None:
     fcm_data = {
         "depends_on": ["mqtt", "mavp2p"],
         "restart": "on-failure",
+        "environment": {"MQTT_PORT": MQTT_PORT},
     }
 
     if local:
@@ -53,6 +68,7 @@ def fusion_service(compose_services: dict, local: bool = False) -> None:
     fusion_data = {
         "depends_on": ["mqtt", "vio"],
         "restart": "on-failure",
+        "environment": {"MQTT_PORT": MQTT_PORT},
     }
 
     if local:
@@ -66,9 +82,17 @@ def fusion_service(compose_services: dict, local: bool = False) -> None:
 def mavp2p_service(compose_services: dict, local: bool = False) -> None:
     mavp2p_data = {
         "restart": "on-failure",
-        "devices": ["/dev/ttyTHS1:/dev/ttyTHS1"],
-        "ports": ["5760:5760/tcp"],
-        "command": "serial:/dev/ttyTHS1:500000 tcps:0.0.0.0:5760 udpc:fcm:14541 udpc:fcm:14542",
+        "devices": [f"{FCC_DEVICE}:{FCC_DEVICE}"],
+        "ports": [f"{MAVLINK_TCP_1}:{MAVLINK_TCP_1}/tcp"],
+        "command": " ".join(
+            [
+                f"serial:{FCC_DEVICE}:{FCC_SERIAL_BAUD_RATE}",
+                f"tcps:0.0.0.0:{MAVLINK_TCP_1}",
+                f"udpc:fcm:{MAVLINK_UDP_1}",
+                f"udpc:fcm:{MAVLINK_UDP_2}",
+            ]
+        ),
+        "environment": {"MAVLINK_UDP_1": MAVLINK_UDP_1, "MAVLINK_UDP_2": MAVLINK_UDP_2},
     }
 
     if local:
@@ -81,7 +105,7 @@ def mavp2p_service(compose_services: dict, local: bool = False) -> None:
 
 def mqtt_service(compose_services: dict, local: bool = False) -> None:
     mqtt_data = {
-        "ports": ["18830:18830"],
+        "ports": [f"{MQTT_PORT}:{MQTT_PORT}/tcp"],
         "restart": "on-failure",
     }
 
@@ -99,7 +123,12 @@ def pcm_service(compose_services: dict, local: bool = False) -> None:
     pcm_data = {
         "depends_on": ["mqtt"],
         "restart": "on-failure",
-        "devices": ["/dev/ttyACM0:/dev/ttyACM0"],
+        "devices": [f"{PCM_DEVICE}:{PCM_DEVICE}"],
+        "environment": {
+            "MQTT_PORT": MQTT_PORT,
+            "PCM_DEVICE": PCM_DEVICE,
+            "PCM_SERIAL_BAUD_RATE": PCM_SERIAL_BAUD_RATE,
+        },
     }
 
     if local:
@@ -132,6 +161,7 @@ def status_service(compose_services: dict, local: bool = False) -> None:
         "depends_on": ["mqtt"],
         "restart": "on-failure",
         "privileged": True,
+        "environment": {"MQTT_PORT": MQTT_PORT},
         "volumes": [
             {
                 "type": "bind",
@@ -167,6 +197,7 @@ def thermal_service(compose_services: dict, local: bool = False) -> None:
         "depends_on": ["mqtt"],
         "restart": "on-failure",
         "privileged": True,
+        "environment": {"MQTT_PORT": MQTT_PORT},
     }
 
     if local:
@@ -184,6 +215,7 @@ def vio_service(compose_services: dict, local: bool = False) -> None:
         "depends_on": ["mqtt"],
         "restart": "on-failure",
         "privileged": True,
+        "environment": {"MQTT_PORT": MQTT_PORT},
         "volumes": [f"{os.path.join(vio_dir, 'settings')}:/usr/local/zed/settings/"],
     }
 
