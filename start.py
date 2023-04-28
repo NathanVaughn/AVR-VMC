@@ -44,6 +44,7 @@ def apriltag_service(compose_services: dict) -> None:
         "depends_on": ["mqtt"],
         "build": apriltag_dir,
         "restart": "on-failure",
+        "environment": {"MQTT_HOST": MQTT_HOST, "MQTT_PORT": MQTT_PORT},
         "volumes": ["/tmp/argus_socket:/tmp/argus_socket"],
     }
 
@@ -56,7 +57,7 @@ def fcm_service(compose_services: dict, local: bool = False) -> None:
     fcm_data = {
         "depends_on": ["mqtt", "mavp2p"],
         "restart": "on-failure",
-        "environment": {"MQTT_PORT": MQTT_PORT},
+        "environment": {"MQTT_HOST": MQTT_HOST, "MQTT_PORT": MQTT_PORT},
     }
 
     if local:
@@ -73,7 +74,7 @@ def fusion_service(compose_services: dict, local: bool = False) -> None:
     fusion_data = {
         "depends_on": ["mqtt", "vio"],
         "restart": "on-failure",
-        "environment": {"MQTT_PORT": MQTT_PORT},
+        "environment": {"MQTT_HOST": MQTT_HOST, "MQTT_PORT": MQTT_PORT},
     }
 
     if local:
@@ -131,6 +132,7 @@ def pcm_service(compose_services: dict, local: bool = False) -> None:
         "restart": "on-failure",
         "devices": [f"{PCM_SERIAL_DEVICE}:{PCM_SERIAL_DEVICE}"],
         "environment": {
+            "MQTT_HOST": MQTT_HOST,
             "MQTT_PORT": MQTT_PORT,
             "PCM_DEVICE": PCM_SERIAL_DEVICE,
             "PCM_SERIAL_BAUD_RATE": PCM_SERIAL_BAUD_RATE,
@@ -152,6 +154,7 @@ def sandbox_service(compose_services: dict) -> None:
         "depends_on": ["mqtt"],
         "build": sandbox_dir,
         "restart": "on-failure",
+        "environment": {"MQTT_HOST": MQTT_HOST, "MQTT_PORT": MQTT_PORT},
     }
 
     compose_services["sandbox"] = sandbox_data
@@ -167,7 +170,7 @@ def status_service(compose_services: dict, local: bool = False) -> None:
         "depends_on": ["mqtt"],
         "restart": "on-failure",
         "privileged": True,
-        "environment": {"MQTT_PORT": MQTT_PORT},
+        "environment": {"MQTT_HOST": MQTT_HOST, "MQTT_PORT": MQTT_PORT},
         "volumes": [
             {
                 "type": "bind",
@@ -203,7 +206,7 @@ def thermal_service(compose_services: dict, local: bool = False) -> None:
         "depends_on": ["mqtt"],
         "restart": "on-failure",
         "privileged": True,
-        "environment": {"MQTT_PORT": MQTT_PORT},
+        "environment": {"MQTT_HOST": MQTT_HOST, "MQTT_PORT": MQTT_PORT},
     }
 
     if local:
@@ -221,7 +224,7 @@ def vio_service(compose_services: dict, local: bool = False) -> None:
         "depends_on": ["mqtt"],
         "restart": "on-failure",
         "privileged": True,
-        "environment": {"MQTT_PORT": MQTT_PORT},
+        "environment": {"MQTT_HOST": MQTT_HOST, "MQTT_PORT": MQTT_PORT},
         "volumes": [f"{os.path.join(vio_dir, 'settings')}:/usr/local/zed/settings/"],
     }
 
