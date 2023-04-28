@@ -25,3 +25,6 @@
 [submodule "modules/vio"]
 	path = modules/vio
 	url = https://github.com/bellflight/AVR-VMC-Visual-Module
+[submodule "resources/pyyaml"]
+	path = resources/pyyaml
+	url = https://github.com/yaml/pyyaml

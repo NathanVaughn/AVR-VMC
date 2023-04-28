@@ -114,7 +114,7 @@ def main(development):
     print_bar()
 
 
-    print_title("Checking git Status")
+    print_title("Checking Git Status")
     # run a few commands as the original user, so as not to break permissons
     print("Configuring credential cache")
     subprocess.check_call(original_user_cmd(orig_username, ["git", "config", "--global", "credential.helper", "cache"]))
@@ -146,7 +146,7 @@ def main(development):
     subprocess.check_call(original_user_cmd(orig_username, ["git", f"--git-dir={os.path.join(AVR_DIR, '.git')}", "--work-tree=.", "-C", AVR_DIR, "submodule", "update", "--init", "--recursive"]), cwd=AVR_DIR)
     print_bar()
 
-    print_title("Creating symlinks")
+    print_title("Creating Symlinks")
     symlink_sources = [
         os.path.join(AVR_DIR, "start.py"),
         os.path.join(AVR_DIR, "install.py"),
@@ -155,7 +155,7 @@ def main(development):
     for source in symlink_sources:
         dest = os.path.join(os.path.expanduser("~"), os.path.basename(source))
         if not os.path.isfile(dest):
-            os.link(source, dest)
+            os.symlink(source, dest)
             print(f"Created {source} -> {dest}")
     print_bar()
 
@@ -185,16 +185,15 @@ def main(development):
         "htop",
         "nano",
         "python3",
-        "python3-wheel",
-        "python3-pip",
+        "docker-compose"
     ]
     print("Installing apt Packages")
     subprocess.check_call(["apt-get", "install", "-y"] + packages, env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"})
 
     # install pip packages
-    print("Installing Python Packages")
-    subprocess.check_call(["python3", "-m", "pip", "install", "--upgrade", "pip", "wheel"], stderr=subprocess.DEVNULL)
-    subprocess.check_call(["python3", "-m", "pip", "install", "-r", os.path.join(AVR_DIR, "resources", "requirements.txt")], stderr=subprocess.DEVNULL)
+    # print("Installing Python Packages")
+    # subprocess.check_call(["python3", "-m", "pip", "install", "--upgrade", "pip", "wheel"], stderr=subprocess.DEVNULL)
+    # subprocess.check_call(["python3", "-m", "pip", "install", "-r", os.path.join(AVR_DIR, "resources", "requirements.txt")], stderr=subprocess.DEVNULL)
 
     if development:
         subprocess.check_call(["python3", "-m", "pip", "install", "--upgrade", "jetson-stats"], stderr=subprocess.DEVNULL)
@@ -255,9 +254,9 @@ def main(development):
 
 
 
-    print_title("Installing Docker Compose")
-    subprocess.check_call(["python3", "-m", "pip", "install", "--upgrade", "docker-compose"], stderr=subprocess.DEVNULL)
-    print_bar()
+    # print_title("Installing Docker Compose")
+    # subprocess.check_call(["python3", "-m", "pip", "install", "--upgrade", "docker-compose"], stderr=subprocess.DEVNULL)
+    # print_bar()
 
 
 

@@ -9,7 +9,8 @@ import sys
 import warnings
 from typing import Any, List
 
-import yaml
+# vendor PyYAML so we don't need to pip install anything
+from resources.pyyaml.lib import yaml
 
 from utils import check_sudo
 
@@ -166,27 +167,18 @@ def status_service(compose_services: dict, local: bool = False) -> None:
 
     status_dir = os.path.join(MODULES_DIR, "status")
 
+    # use the older style of bind mounts for older docker-compose compatibility
     status_data = {
         "depends_on": ["mqtt"],
         "restart": "on-failure",
         "privileged": True,
         "environment": {"MQTT_HOST": MQTT_HOST, "MQTT_PORT": MQTT_PORT},
-        "volumes": [
-            {
-                "type": "bind",
-                "source": "/etc/nvpmodel.conf",
-                "target": "/app/nvpmodel.conf",
-            },
-        ],
+        "volumes": ["/etc/nvpmodel.conf:/app/nvpmodel.conf"],
     }
 
     if nvpmodel_source:
         status_data["volumes"].append(
-            {
-                "type": "bind",
-                "source": nvpmodel_source,
-                "target": "/app/nvpmodel",
-            }
+            f"{nvpmodel_source}:/app/nvpmodel"
         )
     else:
         warnings.warn("nvpmodel is not found")
