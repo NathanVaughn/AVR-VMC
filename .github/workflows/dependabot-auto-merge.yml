@@ -13,7 +13,7 @@ jobs:
     # https://unix.stackexchange.com/a/82610
     steps:
       - name: Enable auto-merge for Dependabot PRs
-        run: for i in {1..5}; gh pr merge --merge "$PR_URL" --delete-branch && break || sleep 15; done
+        run: for i in {1..5}; do gh pr merge --merge "$PR_URL" --delete-branch && break || sleep 15; done
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
