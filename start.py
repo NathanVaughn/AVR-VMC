@@ -7,12 +7,13 @@ import signal
 import subprocess
 import sys
 import warnings
-from typing import Any, List
+from typing import Any, List, Literal
 
 # vendor PyYAML so we don't need to pip install anything
 from resources.pyyaml.lib import yaml
-
 from utils import check_sudo
+
+ACTION_CHOCIES = Literal["run", "build", "pull", "stop"]
 
 IMAGE_BASE = "ghcr.io/bellflight/avr/"
 THIS_DIR = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
@@ -34,20 +35,35 @@ MAVLINK_UDP_1 = 14541  # for mavsdk
 MAVLINK_UDP_2 = 14542  # for pymavlink
 
 # Peripheral control computer (Arduino) device settings
-PCM_SERIAL_DEVICE = "/dev/ttyACM0"
-PCM_SERIAL_BAUD_RATE = 115200
+PCC_SERIAL_DEVICE = "/dev/ttyACM0"
+PCC_SERIAL_BAUD_RATE = 115200
 
 
-def apriltag_service(compose_services: dict) -> None:
+def apriltag_service(compose_services: dict, action: ACTION_CHOCIES) -> None:
     apriltag_dir = os.path.join(MODULES_DIR, "apriltag")
+
+    argus_socket = "/tmp/argus_socket"
+    nvidia_lib_dir = "/opt/nvidia/vpi1/"
 
     apriltag_data = {
         "depends_on": ["mqtt"],
         "build": apriltag_dir,
         "restart": "on-failure",
         "environment": {"MQTT_HOST": MQTT_HOST, "MQTT_PORT": MQTT_PORT},
-        "volumes": ["/tmp/argus_socket:/tmp/argus_socket"],
+        "volumes": [f"{argus_socket}:{argus_socket}"],
     }
+
+    # cannot run if the argus socket does not exist
+    if not os.path.isfile(argus_socket) and action == "run":
+        warnings.warn(
+            f"Argus socket {argus_socket} does not exist, cannot run Apriltag, skipping"
+        )
+        return
+
+    # cannot build without nvidia libraries
+    if not os.path.isdir(nvidia_lib_dir) and action == "build":
+        warnings.warn("Nvidia libraries do not exist, cannot build Apriltag, skipping")
+        return
 
     compose_services["apriltag"] = apriltag_data
 
@@ -86,7 +102,9 @@ def fusion_service(compose_services: dict, local: bool = False) -> None:
     compose_services["fusion"] = fusion_data
 
 
-def mavp2p_service(compose_services: dict, local: bool = False) -> None:
+def mavp2p_service(
+    compose_services: dict, action: ACTION_CHOCIES, local: bool = False
+) -> None:
     mavp2p_data = {
         "restart": "on-failure",
         "devices": [f"{FCC_SERIAL_DEVICE}:{FCC_SERIAL_DEVICE}"],
@@ -101,6 +119,13 @@ def mavp2p_service(compose_services: dict, local: bool = False) -> None:
         ),
         "environment": {"MAVLINK_UDP_1": MAVLINK_UDP_1, "MAVLINK_UDP_2": MAVLINK_UDP_2},
     }
+
+    # cannot run without FCC plugged in
+    if not os.path.exists(FCC_SERIAL_DEVICE) and action == "run":
+        warnings.warn(
+            f"FCC serial device {FCC_SERIAL_DEVICE} does not exist, cannot run mavp2p, skipping"
+        )
+        return
 
     if local:
         mavp2p_data["build"] = os.path.join(MODULES_DIR, "mavp2p")
@@ -125,20 +150,29 @@ def mqtt_service(compose_services: dict, local: bool = False) -> None:
     compose_services["mqtt"] = mqtt_data
 
 
-def pcm_service(compose_services: dict, local: bool = False) -> None:
+def pcm_service(
+    compose_services: dict, action: ACTION_CHOCIES, local: bool = False
+) -> None:
     pcm_dir = os.path.join(MODULES_DIR, "pcm")
 
     pcm_data = {
         "depends_on": ["mqtt"],
         "restart": "on-failure",
-        "devices": [f"{PCM_SERIAL_DEVICE}:{PCM_SERIAL_DEVICE}"],
+        "devices": [f"{PCC_SERIAL_DEVICE}:{PCC_SERIAL_DEVICE}"],
         "environment": {
             "MQTT_HOST": MQTT_HOST,
             "MQTT_PORT": MQTT_PORT,
-            "PCM_SERIAL_DEVICE": PCM_SERIAL_DEVICE,
-            "PCM_SERIAL_BAUD_RATE": PCM_SERIAL_BAUD_RATE,
+            "PCC_SERIAL_DEVICE": PCC_SERIAL_DEVICE,
+            "PCC_SERIAL_BAUD_RATE": PCC_SERIAL_BAUD_RATE,
         },
     }
+
+    # cannot run without PCC plugged in
+    if not os.path.exists(PCC_SERIAL_DEVICE) and action == "run":
+        warnings.warn(
+            f"PCC serial device {PCC_SERIAL_DEVICE} does not exist, cannot run pcm, skipping"
+        )
+        return
 
     if local:
         pcm_data["build"] = pcm_dir
@@ -158,12 +192,20 @@ def sandbox_service(compose_services: dict) -> None:
         "environment": {"MQTT_HOST": MQTT_HOST, "MQTT_PORT": MQTT_PORT},
     }
 
+    # cannot build or run without files (duh)
+    if not os.path.isdir(sandbox_dir):
+        warnings.warn("Sandbox directory does not exist, skipping")
+        return
+
     compose_services["sandbox"] = sandbox_data
 
 
-def status_service(compose_services: dict, local: bool = False) -> None:
+def status_service(
+    compose_services: dict, action: ACTION_CHOCIES, local: bool = False
+) -> None:
     # don't create a volume for nvpmodel if it's not available
     nvpmodel_source = shutil.which("nvpmodel")
+    nvpmodel_conf = "/etc/nvpmodel.conf"
 
     status_dir = os.path.join(MODULES_DIR, "status")
 
@@ -173,15 +215,16 @@ def status_service(compose_services: dict, local: bool = False) -> None:
         "restart": "on-failure",
         "privileged": True,
         "environment": {"MQTT_HOST": MQTT_HOST, "MQTT_PORT": MQTT_PORT},
-        "volumes": ["/etc/nvpmodel.conf:/app/nvpmodel.conf"],
+        "volumes": [
+            "/etc/nvpmodel.conf:/app/nvpmodel.conf",
+            f"{nvpmodel_source}:/app/nvpmodel",
+        ],
     }
 
-    if nvpmodel_source:
-        status_data["volumes"].append(
-            f"{nvpmodel_source}:/app/nvpmodel"
-        )
-    else:
-        warnings.warn("nvpmodel is not found")
+    # cannot run without nvpmodel or its configuration
+    if (not os.path.isfile(nvpmodel_conf) or not nvpmodel_source) and action == "run":
+        warnings.warn("nvpmodel could not be found, cannot run status, skipping")
+        return
 
     if local:
         status_data["build"] = status_dir
@@ -206,6 +249,8 @@ def thermal_service(compose_services: dict, local: bool = False) -> None:
     else:
         thermal_data["image"] = f"{IMAGE_BASE}thermal:latest"
 
+    # realistically this can't run without the thermal camera connected, but this is
+    # difficult to detect without all the Adafruit libraries
     compose_services["thermal"] = thermal_data
 
 
@@ -225,30 +270,39 @@ def vio_service(compose_services: dict, local: bool = False) -> None:
     else:
         vio_data["image"] = f"{IMAGE_BASE}visual:latest"
 
+    # realistically this can't run without the ZED Mini connected, but also
+    # hard to detect without USB shenangians
     compose_services["vio"] = vio_data
 
 
-def prepare_compose_file(action: str, modules: List[str], local: bool = False) -> str:
+def prepare_compose_file(
+    action: ACTION_CHOCIES, modules: List[str], local: bool = False
+) -> str:
     # prepare compose services dict
     compose_services = {}
 
-    apriltag_service(compose_services)
-    fcm_service(compose_services, local)
-    fusion_service(compose_services, local)
-    mavp2p_service(compose_services, local)
-    mqtt_service(compose_services, local)
-    pcm_service(compose_services, local)
+    if "apriltag" in modules:
+        # apriltag is always built on device
+        apriltag_service(compose_services, action)
+    if "fcm" in modules:
+        fcm_service(compose_services, local)
+    if "fusion" in modules:
+        fusion_service(compose_services, local)
+    if "mavp2p" in modules:
+        mavp2p_service(compose_services, action, local)
+    if "mqtt" in modules:
+        mqtt_service(compose_services, local)
+    if "pcm" in modules:
+        pcm_service(compose_services, action, local)
     if "sandbox" in modules:
-        # older versions of Docker compose don't like it if a build directory doesn't
-        # exist, even though we're not asking for that service
+        # sandbox is always built on device
         sandbox_service(compose_services)
-    thermal_service(compose_services, local)
-    vio_service(compose_services, local)
-
-    # nvpmodel not available on Windows
-    if os.name != "nt" or action == "build":
-        # only allow this if we're building
-        status_service(compose_services, local)
+    if "status" in modules:
+        status_service(compose_services, action, local)
+    if "thermal" in modules:
+        thermal_service(compose_services, local)
+    if "vio" in modules:
+        vio_service(compose_services, local)
 
     # construct full dict
     compose_data = {"version": "3", "services": compose_services}
@@ -263,7 +317,7 @@ def prepare_compose_file(action: str, modules: List[str], local: bool = False) -
     return compose_file
 
 
-def main(action: str, modules: List[str], local: bool = False) -> None:
+def main(action: ACTION_CHOCIES, modules: List[str], local: bool = False) -> None:
     compose_file = prepare_compose_file(action, modules=modules, local=local)
 
     # run docker-compose
@@ -274,10 +328,18 @@ def main(action: str, modules: List[str], local: bool = False) -> None:
 
     # prefer newer docker compose if available
     docker_compose = [shutil.which("docker"), "compose"]
-    if subprocess.run(docker_compose + ["--help"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
+    if (
+        subprocess.run(
+            docker_compose + ["--help"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode
+        != 0
+    ):
         docker_compose = [shutil.which("docker-compose")]
 
-    cmd = docker_compose + ["--project-name", project_name, "--file", compose_file]
+    # pyright is upset because shutil.which could return None
+    cmd: List[str] = docker_compose + ["--project-name", project_name, "--file", compose_file]  # type: ignore
 
     if action == "build":
         cmd += ["build"] + modules
