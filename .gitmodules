@@ -28,3 +28,6 @@
 [submodule "resources/pyyaml"]
 	path = resources/pyyaml
 	url = https://github.com/yaml/pyyaml
+[submodule "modules/simulator"]
+	path = modules/simulator
+	url = https://github.com/bellflight/AVR-VMC-Simulator
