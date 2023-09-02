@@ -272,7 +272,12 @@ def main(action: str, modules: List[str], local: bool = False) -> None:
         # for some reason on Windows docker-compose doesn't like upper case???
         project_name = project_name.lower()
 
-    cmd = ["docker-compose", "--project-name", project_name, "--file", compose_file]
+    # prefer newer docker compose if available
+    docker_compose = [shutil.which("docker"), "compose"]
+    if subprocess.run(docker_compose + ["--help"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
+        docker_compose = [shutil.which("docker-compose")]
+
+    cmd = docker_compose + ["--project-name", project_name, "--file", compose_file]
 
     if action == "build":
         cmd += ["build"] + modules
