@@ -1,6 +1,6 @@
 import os
-import sys
 import subprocess
+import sys
 
 
 def check_sudo(original_file) -> None:
@@ -15,7 +15,7 @@ def check_sudo(original_file) -> None:
         try:
             sys.exit(
                 subprocess.run(
-                    ["sudo", sys.executable, os.path.realpath(original_file)]
+                    ["sudo", "-E", sys.executable, os.path.realpath(original_file)]
                     + sys.argv[1:]
                 ).returncode
             )

@@ -13,6 +13,8 @@ from typing import Any, List, Literal
 from resources.pyyaml.lib import yaml
 from utils import check_sudo
 
+# for docker compose. Modern versisons of Docker only accept lower case
+DOCKER_PROJECT_NAME = "avr"
 ACTION_CHOCIES = Literal["run", "build", "pull", "stop"]
 
 IMAGE_BASE = "ghcr.io/bellflight/avr/"
@@ -37,6 +39,11 @@ MAVLINK_UDP_2 = 14542  # for pymavlink
 # Peripheral control computer (Arduino) device settings
 PCC_SERIAL_DEVICE = "/dev/ttyACM0"
 PCC_SERIAL_BAUD_RATE = 115200
+
+# PX4 Origin settings
+PX4_HOME_LAT = 32.808549
+PX4_HOME_LON = -97.156345
+PX4_HOME_ALT = 161.5
 
 
 def apriltag_service(compose_services: dict, action: ACTION_CHOCIES) -> None:
@@ -91,7 +98,13 @@ def fusion_service(compose_services: dict, local: bool = False) -> None:
     fusion_data = {
         "depends_on": ["mqtt", "vio"],
         "restart": "on-failure",
-        "environment": {"MQTT_HOST": MQTT_HOST, "MQTT_PORT": MQTT_PORT},
+        "environment": {
+            "MQTT_HOST": MQTT_HOST,
+            "MQTT_PORT": MQTT_PORT,
+            "PX4_HOME_LAT": PX4_HOME_LAT,
+            "PX4_HOME_LON": PX4_HOME_LON,
+            "PX4_HOME_ALT": PX4_HOME_ALT,
+        },
     }
 
     if local:
@@ -200,6 +213,70 @@ def sandbox_service(compose_services: dict) -> None:
     compose_services["sandbox"] = sandbox_data
 
 
+def simulator_service(
+    compose_services: dict, action: ACTION_CHOCIES, local: bool = False
+) -> None:
+    simulator_dir = os.path.join(MODULES_DIR, "simulator")
+
+    # https://stackoverflow.com/a/73901260/9944427
+    # https://github.com/microsoft/wslg/blob/main/samples/container/Containers.md
+
+    simulator_data = {}
+
+    if local:
+        image = f"{DOCKER_PROJECT_NAME}-simulator:latest"
+        simulator_data["build"] = simulator_dir
+    else:
+        image = f"{IMAGE_BASE}simulator:latest"
+        simulator_data["image"] = image
+
+    if action == "build":
+        compose_services["simulator"] = simulator_data
+
+    elif action == "run":
+        # for now, only work with Windows terminal
+        # need to run as seperate process so that we can get an interactive terminal
+        wt = "wt.exe"
+        if os.name == "posix":
+            wt = "/mnt/c/Users/nvaug/AppData/Local/Microsoft/WindowsApps/wt.exe"
+
+        terminal_cmd = [
+            wt,
+            "--window",
+            "new",
+            "nt",
+        ]
+        docker_cmd = [
+            "docker",
+            "run",
+            "-it",
+            "--rm",
+            "-v",
+            "/tmp/.X11-unix:/tmp/.X11-unix",
+            "-v",
+            "/mnt/wslg:/mnt/wslg",
+            "-e",
+            "DISPLAY",
+            "-e",
+            "WAYLAND_DISPLAY",
+            "-e",
+            "XDG_RUNTIME_DIR",
+            "-e",
+            "PULSE_SERVER",
+            "-e",
+            f"PX4_HOME_LAT={PX4_HOME_LAT}",
+            "-e",
+            f"PX4_HOME_LON={PX4_HOME_LON}",
+            "-e",
+            f"PX4_HOME_ALT={PX4_HOME_ALT}",
+            image,
+        ]
+
+        cmd = terminal_cmd + ["wsl"] + docker_cmd
+        # print(" ".join(cmd))
+        subprocess.Popen(cmd)
+
+
 def status_service(
     compose_services: dict, action: ACTION_CHOCIES, local: bool = False
 ) -> None:
@@ -304,6 +381,9 @@ def prepare_compose_file(
     if "vio" in modules:
         vio_service(compose_services, local)
 
+    if "simulator" in modules:
+        simulator_service(compose_services, action, local)
+
     # construct full dict
     compose_data = {"version": "3", "services": compose_services}
 
@@ -320,12 +400,6 @@ def prepare_compose_file(
 def main(action: ACTION_CHOCIES, modules: List[str], local: bool = False) -> None:
     compose_file = prepare_compose_file(action, modules=modules, local=local)
 
-    # run docker-compose
-    project_name = "AVR"
-    if os.name == "nt":
-        # for some reason on Windows docker-compose doesn't like upper case???
-        project_name = project_name.lower()
-
     # prefer newer docker compose if available
     docker_compose = [shutil.which("docker"), "compose"]
     if (
@@ -339,13 +413,15 @@ def main(action: ACTION_CHOCIES, modules: List[str], local: bool = False) -> Non
         docker_compose = [shutil.which("docker-compose")]
 
     # pyright is upset because shutil.which could return None
-    cmd: List[str] = docker_compose + ["--project-name", project_name, "--file", compose_file]  # type: ignore
+    cmd: List[str] = docker_compose + ["--project-name", DOCKER_PROJECT_NAME, "--file", compose_file]  # type: ignore
 
     if action == "build":
         cmd += ["build"] + modules
     elif action == "pull":
         cmd += ["pull"] + modules
     elif action == "run":
+        # simulator is run seperately
+        modules.remove("simulator") if "simulator" in modules else None
         cmd += ["up", "--remove-orphans", "--force-recreate"] + modules
     elif action == "stop":
         cmd += ["down", "--remove-orphans", "--volumes"]
