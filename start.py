@@ -4,6 +4,7 @@ import argparse
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import warnings
@@ -44,6 +45,17 @@ PCC_SERIAL_BAUD_RATE = 115200
 PX4_HOME_LAT = 32.808549
 PX4_HOME_LON = -97.156345
 PX4_HOME_ALT = 161.5
+
+
+def get_ip_address() -> str:
+    # https://stackoverflow.com/a/30990617/9944427
+    # network access not actually required, but we need to pick a valid ip address
+    # that is routed externally
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("1.1.1.1", 80))
+    name = s.getsockname()[0]
+    s.close()
+    return name
 
 
 def apriltag_service(compose_services: dict, action: ACTION_CHOCIES) -> None:
@@ -116,15 +128,16 @@ def fusion_service(compose_services: dict, local: bool = False) -> None:
 
 
 def mavp2p_service(
-    compose_services: dict, action: ACTION_CHOCIES, local: bool = False
+    compose_services: dict,
+    action: ACTION_CHOCIES,
+    local: bool = False,
+    simulator: bool = False,
 ) -> None:
     mavp2p_data = {
         "restart": "on-failure",
-        "devices": [f"{FCC_SERIAL_DEVICE}:{FCC_SERIAL_DEVICE}"],
         "ports": [f"{MAVLINK_TCP_1}:{MAVLINK_TCP_1}/tcp"],
         "command": " ".join(
             [
-                f"serial:{FCC_SERIAL_DEVICE}:{FCC_SERIAL_BAUD_RATE}",
                 f"tcps:0.0.0.0:{MAVLINK_TCP_1}",
                 f"udpc:fcm:{MAVLINK_UDP_1}",
                 f"udpc:fcm:{MAVLINK_UDP_2}",
@@ -133,12 +146,25 @@ def mavp2p_service(
         "environment": {"MAVLINK_UDP_1": MAVLINK_UDP_1, "MAVLINK_UDP_2": MAVLINK_UDP_2},
     }
 
-    # cannot run without FCC plugged in
-    if not os.path.exists(FCC_SERIAL_DEVICE) and action == "run":
-        warnings.warn(
-            f"FCC serial device {FCC_SERIAL_DEVICE} does not exist, cannot run mavp2p, skipping"
+    if simulator:
+        # when using simulator, allow connection from the offboard mavlink port
+        mavp2p_data["command"] += " udps:0.0.0.0:14540"
+        mavp2p_data["ports"] += ["14540:14540/udp"]
+
+    if not simulator:
+        # when not in simulator, add fcc serial device
+        mavp2p_data["command"] = (
+            f"serial:{FCC_SERIAL_DEVICE}:{FCC_SERIAL_BAUD_RATE} "
+            + mavp2p_data["command"]
         )
-        return
+        mavp2p_data["devices"] = [f"{FCC_SERIAL_DEVICE}:{FCC_SERIAL_DEVICE}"]
+
+        # cannot run without FCC plugged in
+        if not os.path.exists(FCC_SERIAL_DEVICE) and action == "run":
+            warnings.warn(
+                f"FCC serial device {FCC_SERIAL_DEVICE} does not exist, cannot run mavp2p, skipping"
+            )
+            return
 
     if local:
         mavp2p_data["build"] = os.path.join(MODULES_DIR, "mavp2p")
@@ -213,68 +239,107 @@ def sandbox_service(compose_services: dict) -> None:
     compose_services["sandbox"] = sandbox_data
 
 
-def simulator_service(
-    compose_services: dict, action: ACTION_CHOCIES, local: bool = False
-) -> None:
+def simulator_service(compose_services: dict, local: bool = False) -> None:
     simulator_dir = os.path.join(MODULES_DIR, "simulator")
+
+    if os.name != "posix":
+        print(
+            "Sorry, the simulator can only be launched from WSL or Linux due to"
+            + " environment variables and volumes."
+        )
+        sys.exit(1)
 
     # https://stackoverflow.com/a/73901260/9944427
     # https://github.com/microsoft/wslg/blob/main/samples/container/Containers.md
 
-    simulator_data = {}
+    simulator_data = {
+        "tty": True,
+        "stdin_open": True,
+        "environment": {
+            "DISPLAY": os.environ["DISPLAY"],
+            "WAYLAND_DISPLAY": os.environ["WAYLAND_DISPLAY"],
+            "XDG_RUNTIME_DIR": os.environ["XDG_RUNTIME_DIR"],
+            "PULSE_SERVER": os.environ["PULSE_SERVER"],
+            "PX4_HOME_LAT": PX4_HOME_LAT,
+            "PX4_HOME_LON": PX4_HOME_LON,
+            "PX4_HOME_ALT": PX4_HOME_ALT,
+            "DOCKER_HOST": get_ip_address(),
+        },
+        "volumes": ["/tmp/.X11-unix:/tmp/.X11-unix", "/mnt/wslg:/mnt/wslg"],
+    }
 
     if local:
-        image = f"{DOCKER_PROJECT_NAME}-simulator:latest"
         simulator_data["build"] = simulator_dir
     else:
-        image = f"{IMAGE_BASE}simulator:latest"
-        simulator_data["image"] = image
+        simulator_data["image"] = f"{IMAGE_BASE}simulator:latest"
 
-    if action == "build":
-        compose_services["simulator"] = simulator_data
+    compose_services["simulator"] = simulator_data
 
-    elif action == "run":
-        # for now, only work with Windows terminal
-        # need to run as seperate process so that we can get an interactive terminal
-        wt = "wt.exe"
-        if os.name == "posix":
-            wt = "/mnt/c/Users/nvaug/AppData/Local/Microsoft/WindowsApps/wt.exe"
 
-        terminal_cmd = [
-            wt,
-            "--window",
-            "new",
-            "nt",
-        ]
-        docker_cmd = [
-            "docker",
-            "run",
-            "-it",
-            "--rm",
-            "-v",
-            "/tmp/.X11-unix:/tmp/.X11-unix",
-            "-v",
-            "/mnt/wslg:/mnt/wslg",
-            "-e",
-            "DISPLAY",
-            "-e",
-            "WAYLAND_DISPLAY",
-            "-e",
-            "XDG_RUNTIME_DIR",
-            "-e",
-            "PULSE_SERVER",
-            "-e",
-            f"PX4_HOME_LAT={PX4_HOME_LAT}",
-            "-e",
-            f"PX4_HOME_LON={PX4_HOME_LON}",
-            "-e",
-            f"PX4_HOME_ALT={PX4_HOME_ALT}",
-            image,
-        ]
+# def simulator_service(
+#     compose_services: dict, action: ACTION_CHOCIES, local: bool = False
+# ) -> None:
+#     simulator_dir = os.path.join(MODULES_DIR, "simulator")
 
-        cmd = terminal_cmd + ["wsl"] + docker_cmd
-        # print(" ".join(cmd))
-        subprocess.Popen(cmd)
+#     # https://stackoverflow.com/a/73901260/9944427
+#     # https://github.com/microsoft/wslg/blob/main/samples/container/Containers.md
+
+#     simulator_data = {}
+
+#     if local:
+#         image = f"{DOCKER_PROJECT_NAME}-simulator:latest"
+#         simulator_data["build"] = simulator_dir
+#     else:
+#         image = f"{IMAGE_BASE}simulator:latest"
+#         simulator_data["image"] = image
+
+#     if action == "build":
+#         compose_services["simulator"] = simulator_data
+
+#     elif action == "run":
+#         # for now, only work with Windows terminal
+#         # need to run as seperate process so that we can get an interactive terminal
+#         wt = "wt.exe"
+#         if os.name == "posix":
+#             wt = "/mnt/c/Users/nvaug/AppData/Local/Microsoft/WindowsApps/wt.exe"
+
+#         terminal_cmd = [
+#             wt,
+#             "--window",
+#             "new",
+#             "nt",
+#         ]
+#         docker_cmd = [
+#             "docker",
+#             "run",
+#             "-it",
+#             "--rm",
+#             # "-p",
+#             # "14540:14540/udp",
+#             "-v",
+#             "/tmp/.X11-unix:/tmp/.X11-unix",
+#             "-v",
+#             "/mnt/wslg:/mnt/wslg",
+#             "-e",
+#             "DISPLAY",
+#             "-e",
+#             "WAYLAND_DISPLAY",
+#             "-e",
+#             "XDG_RUNTIME_DIR",
+#             "-e",
+#             "PULSE_SERVER",
+#             "-e",
+#             f"PX4_HOME_LAT={PX4_HOME_LAT}",
+#             "-e",
+#             f"PX4_HOME_LON={PX4_HOME_LON}",
+#             "-e",
+#             f"PX4_HOME_ALT={PX4_HOME_ALT}",
+#             image,
+#         ]
+
+#         cmd = terminal_cmd + ["wsl"] + docker_cmd
+#         # print(" ".join(cmd))
+#         subprocess.Popen(cmd)
 
 
 def status_service(
@@ -355,8 +420,14 @@ def vio_service(compose_services: dict, local: bool = False) -> None:
 def prepare_compose_file(
     action: ACTION_CHOCIES, modules: List[str], local: bool = False
 ) -> str:
+    simulator = "simulator" in modules
+
     # prepare compose services dict
     compose_services = {}
+
+    # should always be available
+    mqtt_service(compose_services, local)
+    mavp2p_service(compose_services, action, local, simulator)
 
     if "apriltag" in modules:
         # apriltag is always built on device
@@ -365,10 +436,6 @@ def prepare_compose_file(
         fcm_service(compose_services, local)
     if "fusion" in modules:
         fusion_service(compose_services, local)
-    if "mavp2p" in modules:
-        mavp2p_service(compose_services, action, local)
-    if "mqtt" in modules:
-        mqtt_service(compose_services, local)
     if "pcm" in modules:
         pcm_service(compose_services, action, local)
     if "sandbox" in modules:
@@ -382,7 +449,7 @@ def prepare_compose_file(
         vio_service(compose_services, local)
 
     if "simulator" in modules:
-        simulator_service(compose_services, action, local)
+        simulator_service(compose_services, local)
 
     # construct full dict
     compose_data = {"version": "3", "services": compose_services}
@@ -399,6 +466,11 @@ def prepare_compose_file(
 
 def main(action: ACTION_CHOCIES, modules: List[str], local: bool = False) -> None:
     compose_file = prepare_compose_file(action, modules=modules, local=local)
+
+    # # as simulator runs seperate
+    # # do nothing if that is the only selection
+    # if modules == ["simulator"]:
+    #     return
 
     # prefer newer docker compose if available
     docker_compose = [shutil.which("docker"), "compose"]
@@ -420,8 +492,6 @@ def main(action: ACTION_CHOCIES, modules: List[str], local: bool = False) -> Non
     elif action == "pull":
         cmd += ["pull"] + modules
     elif action == "run":
-        # simulator is run seperately
-        modules.remove("simulator") if "simulator" in modules else None
         cmd += ["up", "--remove-orphans", "--force-recreate"] + modules
     elif action == "stop":
         cmd += ["down", "--remove-orphans", "--volumes"]
