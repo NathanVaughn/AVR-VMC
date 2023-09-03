@@ -4,7 +4,6 @@ import argparse
 import os
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 import warnings
@@ -47,15 +46,41 @@ PX4_HOME_LON = -97.156345
 PX4_HOME_ALT = 161.5
 
 
-def get_ip_address() -> str:
-    # https://stackoverflow.com/a/30990617/9944427
-    # network access not actually required, but we need to pick a valid ip address
-    # that is routed externally
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("1.1.1.1", 80))
-    name = s.getsockname()[0]
-    s.close()
-    return name
+# def get_ip_address() -> str:
+#     # https://stackoverflow.com/a/30990617/9944427
+#     # network access not actually required, but we need to pick a valid ip address
+#     # that is routed externally
+
+#     # this gives a different address than
+#     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+#     s.connect(("1.1.1.1", 80))
+#     name = s.getsockname()[0]
+#     s.close()
+#     return name
+
+
+def get_env_from_wsl(key: str) -> str:
+    """
+    Get an environment variable from WSL
+    """
+    if os.name == "posix":
+        return os.environ[key]
+    return subprocess.check_output(["wsl", "echo", f"${key}"]).decode("utf-8").strip()
+
+
+def convert_windows_path_to_wsl(path: str) -> str:
+    """
+    Given a Windows path, conver to WSL mount format
+    """
+    path = os.path.abspath(path)
+
+    # parse the Windows drive letter
+    drive_letter = path.split(":", maxsplit=1)[0]
+    # get everything past the drive letter
+    not_drive_letter = path.split("\\", maxsplit=1)[1]
+    not_drive_letter_converted = not_drive_letter.replace("\\", "/")
+    # build
+    return f"/mnt/{drive_letter.lower()}/{not_drive_letter_converted}"
 
 
 def apriltag_service(compose_services: dict, action: ACTION_CHOCIES) -> None:
@@ -239,34 +264,42 @@ def sandbox_service(compose_services: dict) -> None:
     compose_services["sandbox"] = sandbox_data
 
 
-def simulator_service(compose_services: dict, local: bool = False) -> None:
+def simulator_service(
+    compose_services: dict, local: bool = False, headless: bool = False
+) -> None:
     simulator_dir = os.path.join(MODULES_DIR, "simulator")
 
-    if os.name != "posix":
-        print(
-            "Sorry, the simulator can only be launched from WSL or Linux due to"
-            + " environment variables and volumes."
-        )
-        sys.exit(1)
-
-    # https://stackoverflow.com/a/73901260/9944427
-    # https://github.com/microsoft/wslg/blob/main/samples/container/Containers.md
-
     simulator_data = {
+        # an interactive terminal is required as PX4 wants to show commander
+        # will not launch without this.
         "tty": True,
         "stdin_open": True,
         "environment": {
-            "DISPLAY": os.environ["DISPLAY"],
-            "WAYLAND_DISPLAY": os.environ["WAYLAND_DISPLAY"],
-            "XDG_RUNTIME_DIR": os.environ["XDG_RUNTIME_DIR"],
-            "PULSE_SERVER": os.environ["PULSE_SERVER"],
             "PX4_HOME_LAT": PX4_HOME_LAT,
             "PX4_HOME_LON": PX4_HOME_LON,
             "PX4_HOME_ALT": PX4_HOME_ALT,
-            "DOCKER_HOST": get_ip_address(),
+            # "DOCKER_HOST": get_ip_address(),
         },
-        "volumes": ["/tmp/.X11-unix:/tmp/.X11-unix", "/mnt/wslg:/mnt/wslg"],
     }
+
+    if headless:
+        simulator_data["environment"]["HEADLESS"] = "1"
+    else:
+        # https://stackoverflow.com/a/73901260/9944427
+        # https://github.com/microsoft/wslg/blob/main/samples/container/Containers.md
+
+        simulator_data["environment"]["DISPLAY"] = get_env_from_wsl("DISPLAY")
+        simulator_data["environment"]["WAYLAND_DISPLAY"] = get_env_from_wsl(
+            "WAYLAND_DISPLAY"
+        )
+        simulator_data["environment"]["XDG_RUNTIME_DIR"] = get_env_from_wsl(
+            "XDG_RUNTIME_DIR"
+        )
+        simulator_data["environment"]["PULSE_SERVER"] = get_env_from_wsl("PULSE_SERVER")
+        simulator_data["volumes"] = [
+            "/tmp/.X11-unix:/tmp/.X11-unix",
+            "/mnt/wslg:/mnt/wslg",
+        ]
 
     if local:
         simulator_data["build"] = simulator_dir
@@ -274,72 +307,6 @@ def simulator_service(compose_services: dict, local: bool = False) -> None:
         simulator_data["image"] = f"{IMAGE_BASE}simulator:latest"
 
     compose_services["simulator"] = simulator_data
-
-
-# def simulator_service(
-#     compose_services: dict, action: ACTION_CHOCIES, local: bool = False
-# ) -> None:
-#     simulator_dir = os.path.join(MODULES_DIR, "simulator")
-
-#     # https://stackoverflow.com/a/73901260/9944427
-#     # https://github.com/microsoft/wslg/blob/main/samples/container/Containers.md
-
-#     simulator_data = {}
-
-#     if local:
-#         image = f"{DOCKER_PROJECT_NAME}-simulator:latest"
-#         simulator_data["build"] = simulator_dir
-#     else:
-#         image = f"{IMAGE_BASE}simulator:latest"
-#         simulator_data["image"] = image
-
-#     if action == "build":
-#         compose_services["simulator"] = simulator_data
-
-#     elif action == "run":
-#         # for now, only work with Windows terminal
-#         # need to run as seperate process so that we can get an interactive terminal
-#         wt = "wt.exe"
-#         if os.name == "posix":
-#             wt = "/mnt/c/Users/nvaug/AppData/Local/Microsoft/WindowsApps/wt.exe"
-
-#         terminal_cmd = [
-#             wt,
-#             "--window",
-#             "new",
-#             "nt",
-#         ]
-#         docker_cmd = [
-#             "docker",
-#             "run",
-#             "-it",
-#             "--rm",
-#             # "-p",
-#             # "14540:14540/udp",
-#             "-v",
-#             "/tmp/.X11-unix:/tmp/.X11-unix",
-#             "-v",
-#             "/mnt/wslg:/mnt/wslg",
-#             "-e",
-#             "DISPLAY",
-#             "-e",
-#             "WAYLAND_DISPLAY",
-#             "-e",
-#             "XDG_RUNTIME_DIR",
-#             "-e",
-#             "PULSE_SERVER",
-#             "-e",
-#             f"PX4_HOME_LAT={PX4_HOME_LAT}",
-#             "-e",
-#             f"PX4_HOME_LON={PX4_HOME_LON}",
-#             "-e",
-#             f"PX4_HOME_ALT={PX4_HOME_ALT}",
-#             image,
-#         ]
-
-#         cmd = terminal_cmd + ["wsl"] + docker_cmd
-#         # print(" ".join(cmd))
-#         subprocess.Popen(cmd)
 
 
 def status_service(
@@ -418,7 +385,10 @@ def vio_service(compose_services: dict, local: bool = False) -> None:
 
 
 def prepare_compose_file(
-    action: ACTION_CHOCIES, modules: List[str], local: bool = False
+    action: ACTION_CHOCIES,
+    modules: List[str],
+    local: bool = False,
+    headless: bool = False,
 ) -> str:
     simulator = "simulator" in modules
 
@@ -449,7 +419,7 @@ def prepare_compose_file(
         vio_service(compose_services, local)
 
     if "simulator" in modules:
-        simulator_service(compose_services, local)
+        simulator_service(compose_services, local, headless)
 
     # construct full dict
     compose_data = {"version": "3", "services": compose_services}
@@ -464,16 +434,16 @@ def prepare_compose_file(
     return compose_file
 
 
-def main(action: ACTION_CHOCIES, modules: List[str], local: bool = False) -> None:
-    compose_file = prepare_compose_file(action, modules=modules, local=local)
-
-    # # as simulator runs seperate
-    # # do nothing if that is the only selection
-    # if modules == ["simulator"]:
-    #     return
+def main(
+    action: ACTION_CHOCIES,
+    modules: List[str],
+    local: bool = False,
+    headless: bool = False,
+) -> None:
+    prepare_compose_file(action, modules=modules, local=local, headless=headless)
 
     # prefer newer docker compose if available
-    docker_compose = [shutil.which("docker"), "compose"]
+    docker_compose = ["docker", "compose"]
     if (
         subprocess.run(
             docker_compose + ["--help"],
@@ -482,10 +452,12 @@ def main(action: ACTION_CHOCIES, modules: List[str], local: bool = False) -> Non
         ).returncode
         != 0
     ):
-        docker_compose = [shutil.which("docker-compose")]
+        docker_compose = ["docker-compose"]
 
-    # pyright is upset because shutil.which could return None
-    cmd: List[str] = docker_compose + ["--project-name", DOCKER_PROJECT_NAME, "--file", compose_file]  # type: ignore
+    cmd: List[str] = docker_compose + [
+        "--project-name",
+        DOCKER_PROJECT_NAME,
+    ]
 
     if action == "build":
         cmd += ["build"] + modules
@@ -498,6 +470,11 @@ def main(action: ACTION_CHOCIES, modules: List[str], local: bool = False) -> Non
     else:
         # shouldn't happen
         raise ValueError(f"Unknown action: {action}")
+
+    # if running simulator not headless, need to run within WSL
+    if "simulator" in modules and not headless:
+        cmd_cwd = convert_windows_path_to_wsl(THIS_DIR)
+        cmd = ["wsl", "--cd", cmd_cwd, "--"] + cmd
 
     print(f"Running command: {' '.join(cmd)}")
     proc = subprocess.Popen(cmd, cwd=THIS_DIR)
@@ -528,6 +505,12 @@ if __name__ == "__main__":
         "--local",
         action="store_true",
         help="Build containers locally rather than using pre-built ones from GitHub",
+    )
+
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run the simulator headless",
     )
 
     parser.add_argument(
@@ -575,4 +558,9 @@ if __name__ == "__main__":
         args.modules = norm_modules
 
     args.modules = list(set(args.modules))  # remove duplicates
-    main(action=args.action, modules=args.modules, local=args.local)
+    main(
+        action=args.action,
+        modules=args.modules,
+        local=args.local,
+        headless=args.headless,
+    )
