@@ -36,7 +36,8 @@ FCC_SERIAL_DEVICE = "/dev/ttyTHS1"
 FCC_SERIAL_BAUD_RATE = 500000
 
 # Mavlink connection settings
-MAVLINK_TCP_1 = 5760  # for QGC
+MAVLINK_TCP_1 = 5760  # for remote QGC
+MAVLINK_UDP_0 = 14540  # for local autodiscover QGC
 MAVLINK_UDP_1 = 14541  # for mavsdk
 MAVLINK_UDP_2 = 14542  # for pymavlink
 
@@ -188,8 +189,10 @@ def mavp2p_service(
 
     if simulator:
         # when using simulator, allow connection from the offboard mavlink port
-        mavp2p_data["command"] += " udps:0.0.0.0:14540"
-        mavp2p_data["ports"] += ["14540:14540/udp"]
+        # this ties the PX4 instance into the mavp2p mavlink network
+        # and still allows QGC to talk on the regular gcs port
+        mavp2p_data["command"] += f" udps:0.0.0.0:{MAVLINK_UDP_0}"
+        mavp2p_data["ports"] += [f"{MAVLINK_UDP_0}:{MAVLINK_UDP_0}/udp"]
 
     if not simulator:
         # when not in simulator, add fcc serial device
