@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import platform
 import shutil
 import signal
 import subprocess
@@ -12,6 +13,9 @@ from typing import Any, List, Literal
 # vendor PyYAML so we don't need to pip install anything
 from resources.pyyaml.lib import yaml
 from utils import check_sudo
+
+IS_WSL = "WSL" in platform.uname().release
+IS_WINDOWS = os.name == "nt"
 
 # for docker compose. Modern versisons of Docker only accept lower case
 DOCKER_PROJECT_NAME = "avr"
@@ -51,7 +55,7 @@ PX4_HOME_ALT = 161.5
 #     # network access not actually required, but we need to pick a valid ip address
 #     # that is routed externally
 
-#     # this gives a different address than
+#     # this gives a different address than what host.docker.internal does
 #     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 #     s.connect(("1.1.1.1", 80))
 #     name = s.getsockname()[0]
@@ -59,20 +63,31 @@ PX4_HOME_ALT = 161.5
 #     return name
 
 
-def get_env_from_wsl(key: str) -> str:
+def get_env_from_wsl(key: str, default: str = "") -> str:
     """
     Get an environment variable from WSL
     """
-    if os.name == "posix":
-        return os.environ[key]
-    return subprocess.check_output(["wsl", "echo", f"${key}"]).decode("utf-8").strip()
+    if not IS_WINDOWS:
+        return os.getenv(key, default)
+
+    # only run on windows
+    output = subprocess.check_output(["wsl", "echo", f"${key}"]).decode("utf-8").strip()
+
+    # empty output
+    if not output:
+        return default
+
+    return output
 
 
 def convert_windows_path_to_wsl(path: str) -> str:
     """
-    Given a Windows path, conver to WSL mount format
+    Given a Windows path, convert to WSL mount format
     """
     path = os.path.abspath(path)
+
+    if not IS_WINDOWS:
+        return path
 
     # parse the Windows drive letter
     drive_letter = path.split(":", maxsplit=1)[0]
@@ -288,18 +303,19 @@ def simulator_service(
         # https://stackoverflow.com/a/73901260/9944427
         # https://github.com/microsoft/wslg/blob/main/samples/container/Containers.md
 
-        simulator_data["environment"]["DISPLAY"] = get_env_from_wsl("DISPLAY")
+        simulator_data["environment"]["DISPLAY"] = get_env_from_wsl("DISPLAY", ":0")
         simulator_data["environment"]["WAYLAND_DISPLAY"] = get_env_from_wsl(
-            "WAYLAND_DISPLAY"
+            "WAYLAND_DISPLAY", "wayland-0"
         )
         simulator_data["environment"]["XDG_RUNTIME_DIR"] = get_env_from_wsl(
             "XDG_RUNTIME_DIR"
         )
         simulator_data["environment"]["PULSE_SERVER"] = get_env_from_wsl("PULSE_SERVER")
-        simulator_data["volumes"] = [
-            "/tmp/.X11-unix:/tmp/.X11-unix",
-            "/mnt/wslg:/mnt/wslg",
-        ]
+        simulator_data["volumes"] = ["/tmp/.X11-unix:/tmp/.X11-unix"]
+
+        # required if Windows or WSL
+        if IS_WINDOWS or IS_WSL:
+            simulator_data["volumes"].append("/mnt/wslg:/mnt/wslg")
 
     if local:
         simulator_data["build"] = simulator_dir
@@ -472,7 +488,7 @@ def main(
         raise ValueError(f"Unknown action: {action}")
 
     # if running simulator not headless, need to run within WSL
-    if "simulator" in modules and not headless:
+    if "simulator" in modules and not headless and IS_WINDOWS:
         cmd_cwd = convert_windows_path_to_wsl(THIS_DIR)
         cmd = ["wsl", "--cd", cmd_cwd, "--"] + cmd
 
