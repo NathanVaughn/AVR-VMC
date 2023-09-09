@@ -5,6 +5,7 @@ import os
 import platform
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import warnings
@@ -51,17 +52,17 @@ PX4_HOME_LON = -97.156345
 PX4_HOME_ALT = 161.5
 
 
-# def get_ip_address() -> str:
-#     # https://stackoverflow.com/a/30990617/9944427
-#     # network access not actually required, but we need to pick a valid ip address
-#     # that is routed externally
+def get_ip_address() -> str:
+    # https://stackoverflow.com/a/30990617/9944427
+    # network access not actually required, but we need to pick a valid ip address
+    # that is routed externally
 
-#     # this gives a different address than what host.docker.internal does
-#     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-#     s.connect(("1.1.1.1", 80))
-#     name = s.getsockname()[0]
-#     s.close()
-#     return name
+    # this gives a different address than what host.docker.internal does
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("1.1.1.1", 80))
+    name = s.getsockname()[0]
+    s.close()
+    return name
 
 
 def get_env_from_wsl(key: str, default: str = "") -> str:
@@ -292,6 +293,7 @@ def simulator_service(
         # will not launch without this.
         "tty": True,
         "stdin_open": True,
+        "depends_on": ["mavp2p"],
         "environment": {
             "PX4_HOME_LAT": PX4_HOME_LAT,
             "PX4_HOME_LON": PX4_HOME_LON,
@@ -491,7 +493,7 @@ def main(
         raise ValueError(f"Unknown action: {action}")
 
     # if running simulator not headless, need to run within WSL
-    if "simulator" in modules and not headless and IS_WINDOWS:
+    if "simulator" in modules and not headless and IS_WINDOWS and action == "run":
         cmd_cwd = convert_windows_path_to_wsl(THIS_DIR)
         cmd = ["wsl", "--cd", cmd_cwd, "--"] + cmd
 
