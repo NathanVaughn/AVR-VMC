@@ -180,6 +180,10 @@ def mavp2p_service(
         "ports": [f"{MAVLINK_TCP_1}:{MAVLINK_TCP_1}/tcp"],
         "command": " ".join(
             [
+                # helps prevent masking connection problems.
+                # normally mavp2p itself publishes heartbeats, which tricks mavsdk into
+                # thinking it's connected
+                "--hb-disable",
                 f"tcps:0.0.0.0:{MAVLINK_TCP_1}",
                 f"udpc:fcm:{MAVLINK_UDP_1}",
                 f"udpc:fcm:{MAVLINK_UDP_2}",
@@ -298,7 +302,7 @@ def simulator_service(
             "PX4_HOME_LAT": PX4_HOME_LAT,
             "PX4_HOME_LON": PX4_HOME_LON,
             "PX4_HOME_ALT": PX4_HOME_ALT,
-            # "DOCKER_HOST": get_ip_address(),
+            # "MAVLINK_HOST_TARGET": get_ip_address(),
         },
     }
 
