@@ -9,10 +9,16 @@ import socket
 import subprocess
 import sys
 import warnings
-from typing import Any, List, Literal
+from typing import Any, List
 
-# vendor PyYAML so we don't need to pip install anything
+# vendor PyYAML/typing extensions so we don't need to pip install anything
 from resources.pyyaml.lib import yaml
+
+try:
+    from typing import Literal
+except ImportError:
+    from resources.typing_extensions.src.typing_extensions import Literal
+
 from utils import check_sudo
 
 IS_WSL = "WSL" in platform.uname().release
@@ -471,7 +477,7 @@ def main(
     docker_compose = ["docker", "compose"]
     if (
         subprocess.run(
-            docker_compose + ["--help"],
+            docker_compose,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         ).returncode
