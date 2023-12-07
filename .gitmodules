@@ -1,33 +1,33 @@
 [submodule "modules/apriltag"]
 	path = modules/apriltag
-	url = https://github.com/bellflight/AVR-VMC-AprilTag-Module
+	url = https://github.com/nathanvaughn/AVR-VMC-AprilTag-Module
 [submodule "modules/fcm"]
 	path = modules/fcm
-	url = https://github.com/bellflight/AVR-VMC-FlightControl-Module
+	url = https://github.com/nathanvaughn/AVR-VMC-FlightControl-Module
 [submodule "modules/fusion"]
 	path = modules/fusion
-	url = https://github.com/bellflight/AVR-VMC-Fusion-Module
+	url = https://github.com/nathanvaughn/AVR-VMC-Fusion-Module
 [submodule "modules/mavp2p"]
 	path = modules/mavp2p
-	url = https://github.com/bellflight/AVR-VMC-Mavp2p
+	url = https://github.com/nathanvaughn/AVR-VMC-Mavp2p
 [submodule "modules/mqtt"]
 	path = modules/mqtt
-	url = https://github.com/bellflight/AVR-VMC-Mosquitto
+	url = https://github.com/nathanvaughn/AVR-VMC-Mosquitto
 [submodule "modules/pcm"]
 	path = modules/pcm
-	url = https://github.com/bellflight/AVR-VMC-PeripheralControl-Module
+	url = https://github.com/nathanvaughn/AVR-VMC-PeripheralControl-Module
 [submodule "modules/status"]
 	path = modules/status
-	url = https://github.com/bellflight/AVR-VMC-Status-Module
+	url = https://github.com/nathanvaughn/AVR-VMC-Status-Module
 [submodule "modules/thermal"]
 	path = modules/thermal
-	url = https://github.com/bellflight/AVR-VMC-Thermal-Module
+	url = https://github.com/nathanvaughn/AVR-VMC-Thermal-Module
 [submodule "modules/vio"]
 	path = modules/vio
-	url = https://github.com/bellflight/AVR-VMC-Visual-Module
+	url = https://github.com/nathanvaughn/AVR-VMC-Visual-Module
 [submodule "modules/simulator"]
 	path = modules/simulator
-	url = https://github.com/bellflight/AVR-VMC-Simulator
+	url = https://github.com/nathanvaughn/AVR-VMC-Simulator
 [submodule "resources/pyyaml"]
 	path = resources/pyyaml
 	url = https://github.com/yaml/pyyaml

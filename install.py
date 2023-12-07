@@ -64,7 +64,7 @@ def main(development):
     if not os.path.isdir(AVR_DIR):
         print(f"AVR repository has not been cloned to {AVR_DIR}")
         print(
-            f"Do this with 'git clone --recurse-submodules https://github.com/bellflight/AVR-VMC {AVR_DIR}'"
+            f"Do this with 'git clone --recurse-submodules https://github.com/nathanvaughn/AVR-VMC {AVR_DIR}'"
         )
         sys.exit(1)
 
@@ -423,7 +423,7 @@ def main(development):
 
     print_title("Building AVR Software")
     # make sure docker is logged in
-    proc = subprocess.run(["docker", "pull", "ghcr.io/bellflight/avr/mavp2p:latest"])
+    proc = subprocess.run(["docker", "pull", "ghcr.io/nathanvaughn/avr/mavp2p:latest"])
     if proc.returncode != 0:
         print("Please log into GitHub container registry:")
         subprocess.check_call(["docker", "login", "ghcr.io"])

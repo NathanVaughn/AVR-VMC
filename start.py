@@ -28,7 +28,7 @@ IS_WINDOWS = os.name == "nt"
 DOCKER_PROJECT_NAME = "avr"
 ACTION_CHOCIES = Literal["run", "build", "pull", "stop"]
 
-IMAGE_BASE = "ghcr.io/bellflight/avr/"
+IMAGE_BASE = "ghcr.io/nathanvaughn/avr/"
 THIS_DIR = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 MODULES_DIR = os.path.join(THIS_DIR, "modules")
 
